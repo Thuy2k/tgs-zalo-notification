@@ -21,16 +21,20 @@ $event_types = [
 
 // Available data fields for mapping
 $available_fields = [
-    'customer_name'  => 'Tên khách hàng',
-    'customer_phone' => 'Số điện thoại',
-    'customer_email' => 'Email',
-    'sale_code'      => 'Mã đơn hàng',
-    'export_code'    => 'Mã phiếu xuất',
-    'total_amount'   => 'Tổng tiền (có định dạng)',
-    'total_items'    => 'Số lượng sản phẩm',
-    'discount'       => 'Giảm giá (có định dạng)',
-    'sale_date'      => 'Ngày bán (dd/mm/yyyy HH:mm)',
-    'shop_name'      => 'Tên cửa hàng',
+    'customer_name'    => 'Tên khách hàng',
+    'customer_phone'   => 'Số điện thoại',
+    'customer_email'   => 'Email',
+    'customer_id'      => 'Mã khách hàng',
+    'sale_code'        => 'Mã đơn hàng',
+    'export_code'      => 'Mã phiếu xuất',
+    'total_amount'     => 'Tổng tiền (có định dạng VD: 1.500.000đ) — dùng cho string',
+    'total_amount_raw' => 'Tổng tiền (số thuần VD: 1500000) — dùng cho number',
+    'total_items'      => 'Số lượng sản phẩm',
+    'discount'         => 'Giảm giá (có định dạng) — dùng cho string',
+    'discount_raw'     => 'Giảm giá (số thuần) — dùng cho number',
+    'sale_date'        => 'Ngày bán (dd/mm/yyyy HH:mm)',
+    'shop_name'        => 'Tên cửa hàng',
+    'shop_address'     => 'Địa chỉ cửa hàng',
 ];
 ?>
 

@@ -60,9 +60,11 @@ class TGS_Zalo_Hooks {
             'customer_id'    => $sale_data['customer_id'] ?? '',
             'sale_code'      => $sale_data['sale_code'] ?? '',
             'export_code'    => $sale_data['export_code'] ?? '',
-            'total_amount'   => self::format_currency($sale_data['total_amount'] ?? 0),
+            'total_amount'       => self::format_currency($sale_data['total_amount'] ?? 0),
+            'total_amount_raw'   => intval($sale_data['total_amount'] ?? 0),
             'total_items'    => $sale_data['total_items'] ?? 0,
-            'discount'       => self::format_currency($sale_data['discount'] ?? 0),
+            'discount'           => self::format_currency($sale_data['discount'] ?? 0),
+            'discount_raw'       => intval($sale_data['discount'] ?? 0),
             'sale_date'      => current_time('d/m/Y H:i'),
             'shop_name'      => $site_name,
             'shop_address'   => get_option('tgs_shop_address', $site_name),
@@ -163,7 +165,8 @@ class TGS_Zalo_Hooks {
             'customer_phone' => $person->local_ledger_person_phone,
             'customer_id'    => $person_id,
             'sale_code'      => $ledger->local_ledger_code ?? '',
-            'total_amount'   => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
+            'total_amount'       => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
+            'total_amount_raw'   => intval($ledger->local_ledger_total_amount ?? 0),
             'sale_date'      => current_time('d/m/Y H:i'),
             'shop_name'      => $site_name,
             'shop_address'   => get_option('tgs_shop_address', $site_name),
@@ -232,7 +235,9 @@ class TGS_Zalo_Hooks {
             }
 
             if (isset($data[$internal_key])) {
-                $result[$zalo_key] = (string) $data[$internal_key];
+                $value = $data[$internal_key];
+                // Keep numeric types for Zalo number/date fields (raw keys)
+                $result[$zalo_key] = is_int($value) || is_float($value) ? $value : (string) $value;
             }
         }
 
