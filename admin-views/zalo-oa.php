@@ -44,13 +44,17 @@ $available_fields = [
     'customer_name'  => 'Tên khách hàng',
     'customer_phone' => 'Số điện thoại',
     'customer_email' => 'Email',
+    'customer_id'    => 'Mã khách hàng',
     'sale_code'      => 'Mã đơn hàng',
     'export_code'    => 'Mã phiếu xuất',
     'total_amount'   => 'Tổng tiền (có định dạng)',
+    'total_amount_raw' => 'Tổng tiền (số thuần, dùng cho number)',
     'total_items'    => 'Số lượng sản phẩm',
     'discount'       => 'Giảm giá (có định dạng)',
+    'discount_raw'   => 'Giảm giá (số thuần, dùng cho number)',
     'sale_date'      => 'Ngày bán (dd/mm/yyyy HH:mm)',
     'shop_name'      => 'Tên cửa hàng',
+    'shop_address'   => 'Địa chỉ cửa hàng',
 ];
 
 // === Data for Log tab ===
@@ -360,7 +364,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                             <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
                                 <div>
                                     <strong>Kích hoạt gửi tin Zalo ZNS</strong><br>
-                                    <small class="text-muted">Khi tắt, tin nhắn vẫn vào hàng đợi nhưng không gửi đi</small>
+                                    <small class="text-muted">Khi tắt, hệ thống sẽ không enqueue/gửi tin mới</small>
                                 </div>
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" name="enabled" value="1"
@@ -613,7 +617,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                     <strong>Mẫu:</strong>
                                     <code class="cursor-pointer text-primary" id="btnSampleMapping"
                                           title="Click để điền mẫu"
-                                          style="cursor: pointer;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount", "date": "sale_date"}</code>
+                                        style="cursor: pointer;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount_raw", "date": "sale_date"}</code>
                                     <br>Giá trị tĩnh: <code>{"status": "static:Đã thanh toán"}</code>
                                 </div>
                             </div>
@@ -994,7 +998,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                     <li>Template ID: (paste từ bước 2)</li>
                                     <li>
                                         Field Mapping mẫu:<br>
-                                        <code style="font-size: 12px;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount", "date": "sale_date", "status": "static:Đã thanh toán"}</code>
+                                        <code style="font-size: 12px;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount_raw", "date": "sale_date", "status": "static:Đã thanh toán"}</code>
                                     </li>
                                 </ul>
                             </li>

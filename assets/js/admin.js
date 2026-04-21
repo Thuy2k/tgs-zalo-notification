@@ -111,7 +111,7 @@
         var sample = {
             "customer_name": "customer_name",
             "order_code": "sale_code",
-            "amount": "total_amount",
+            "amount": "total_amount_raw",
             "date": "sale_date",
             "status": "static:Đã thanh toán"
         };
@@ -352,7 +352,7 @@
         var sample = {
             "customer_name": "Nguyen Van A",
             "order_code": "DH-TEST-001",
-            "amount": "1.500.000đ",
+            "amount": 1500000,
             "date": new Date().toLocaleDateString('vi-VN') + ' ' + new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'}),
             "status": "Đã thanh toán"
         };
@@ -382,10 +382,14 @@
                     'sale_code': 'DH-TEST-001',
                     'export_code': 'PX-TEST-001',
                     'total_amount': '1.500.000đ',
+                    'total_amount_raw': 1500000,
                     'total_items': '3',
                     'discount': '0đ',
+                    'discount_raw': 0,
                     'sale_date': new Date().toLocaleDateString('vi-VN'),
-                    'shop_name': 'Thế Giới Sữa'
+                    'shop_name': 'Thế Giới Sữa',
+                    'shop_address': '402 Duong Chau Phong, Viet Tri, Phu Tho',
+                    'customer_id': 'KH-001'
                 };
                 for (var key in parsed) {
                     var val = parsed[key];

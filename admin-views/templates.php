@@ -80,7 +80,7 @@ $available_fields = [
                         <textarea name="field_mapping" id="templateFieldMapping" rows="8" class="large-text code" placeholder='{"tên_param_zalo": "data_key_hệ_thống"}'>{}</textarea>
                         <p class="description">
                             Map tham số template Zalo với dữ liệu hệ thống. Ví dụ:<br>
-                            <code>{"customer_name": "customer_name", "order_code": "sale_code", "total": "total_amount", "date": "sale_date"}</code><br>
+                            <code>{"customer_name": "customer_name", "order_code": "sale_code", "total": "total_amount_raw", "date": "sale_date"}</code><br>
                             Hỗ trợ giá trị tĩnh: <code>{"status": "static:Đã thanh toán"}</code>
                         </p>
                         <details>
