@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Plugin Name: TGS Zalo Notification
  * Plugin URI:  https://tgs.vn
@@ -256,17 +256,21 @@ class TGS_Zalo_Notification {
         $zalo_template_id = sanitize_text_field($_POST['zalo_template_id'] ?? '');
         $event_type = sanitize_text_field($_POST['event_type'] ?? '');
         $label = sanitize_text_field($_POST['label'] ?? '');
-        $field_mapping = sanitize_textarea_field($_POST['field_mapping'] ?? '{}');
+        $field_mapping = sanitize_textarea_field(wp_unslash($_POST['field_mapping'] ?? '{}'));
         $is_active = intval($_POST['is_active'] ?? 1);
 
         if (empty($zalo_template_id) || empty($event_type) || empty($label)) {
             wp_send_json_error('Thiếu thông tin bắt buộc.');
         }
 
-        // Validate JSON
+        $field_mapping = trim($field_mapping);
         $decoded = json_decode($field_mapping, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            wp_send_json_error('Field mapping JSON không hợp lệ.');
+            wp_send_json_error('Field mapping JSON không hợp lệ: ' . json_last_error_msg());
+        }
+
+        if (!is_array($decoded)) {
+            wp_send_json_error('Field mapping JSON phải là object dạng key-value.');
         }
 
         $data = [

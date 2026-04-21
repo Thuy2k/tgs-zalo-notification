@@ -146,6 +146,14 @@
         var $btn = $form.find('[type=submit]').prop('disabled', true);
 
         var mapping = $form.find('#templateFieldMapping').val();
+        // Normalize common paste artifacts before validating
+        mapping = mapping.replace(/[\u200B\u200C\u200D\uFEFF]/g, ''); // zero-width chars
+        mapping = mapping.replace(/[\u201C\u201D\u201E\u201F]/g, '"'); // smart double quotes
+        mapping = mapping.replace(/[\u2018\u2019\u201A\u201B]/g, "'"); // smart single quotes
+        mapping = mapping.replace(/,(\s*[}\]])/g, '$1'); // trailing commas
+        mapping = mapping.trim();
+        if (mapping && mapping[0] !== '{' && mapping[0] !== '[') { mapping = '{' + mapping + '}'; }
+        $form.find('#templateFieldMapping').val(mapping); // write back cleaned value
         try {
             JSON.parse(mapping);
         } catch(err) {
@@ -301,6 +309,10 @@
 
         // Validate JSON if provided
         if (templateData) {
+            templateData = templateData.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+            templateData = templateData.replace(/[\u201C\u201D\u201E\u201F]/g, '"');
+            templateData = templateData.replace(/[\u2018\u2019\u201A\u201B]/g, "'");
+            templateData = templateData.replace(/,(\s*[}\]])/g, '$1');
             try { JSON.parse(templateData); } catch(err) {
                 showNotice('Template Data JSON không hợp lệ: ' + err.message, 'danger');
                 $btn.prop('disabled', false).html(origHtml);
