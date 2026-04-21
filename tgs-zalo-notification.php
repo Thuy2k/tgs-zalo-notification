@@ -370,7 +370,7 @@ class TGS_Zalo_Notification {
 
         $phone_raw = sanitize_text_field($_POST['phone'] ?? '');
         $zalo_template_id = sanitize_text_field($_POST['zalo_template_id'] ?? '');
-        $raw_template_data = sanitize_textarea_field($_POST['template_data'] ?? '');
+        $raw_template_data = sanitize_textarea_field(wp_unslash($_POST['template_data'] ?? ''));
         $config_template_id = intval($_POST['config_template_id'] ?? 0);
 
         if (empty($phone_raw)) {
