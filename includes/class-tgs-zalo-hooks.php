@@ -16,6 +16,8 @@ class TGS_Zalo_Hooks {
 
         // Hook into manual ticket approval (optional - for non-POS sales)
         add_action('tgs_ledger_status_changed', [__CLASS__, 'on_ledger_status_changed'], 10, 3);
+
+        self::seed_default_sale_points_template();
     }
 
     /**
@@ -52,22 +54,40 @@ class TGS_Zalo_Hooks {
             $site_name = get_bloginfo('name');
         }
 
+        $shop_address = $sale_data['shop_address'] ?? get_option('tgs_shop_address', $site_name);
+        $order_date = $sale_data['order_date'] ?? ($sale_data['sale_date'] ?? current_time('d/m/Y H:i'));
+        $price = intval(round($sale_data['price'] ?? ($sale_data['total_amount'] ?? 0)));
+        $earned_points = isset($sale_data['point'])
+            ? intval($sale_data['point'])
+            : self::calculate_points($sale_data['total_amount'] ?? 0);
+        $total_points = isset($sale_data['total_point']) ? intval($sale_data['total_point']) : 0;
+        $note = !empty($sale_data['note'])
+            ? (string) $sale_data['note']
+            : self::build_points_note($shop_address, $site_name);
+
         // Build available data for template mapping
         $available_data = [
             'customer_name'  => $sale_data['person_name'] ?? 'Quý khách',
             'customer_phone' => $phone,
             'customer_email' => $sale_data['person_email'] ?? '',
             'customer_id'    => $sale_data['customer_id'] ?? '',
+            'customer_code'  => $sale_data['customer_code'] ?? ($sale_data['customer_id'] ?? ''),
             'sale_code'      => $sale_data['sale_code'] ?? '',
+            'order_code'     => $sale_data['order_code'] ?? ($sale_data['sale_code'] ?? ''),
             'export_code'    => $sale_data['export_code'] ?? '',
+            'order_date'     => $order_date,
+            'price'          => $price,
+            'point'          => $earned_points,
+            'total_point'    => $total_points,
+            'note'           => self::truncate_text($note, 30),
             'total_amount'       => self::format_currency($sale_data['total_amount'] ?? 0),
             'total_amount_raw'   => intval($sale_data['total_amount'] ?? 0),
             'total_items'    => $sale_data['total_items'] ?? 0,
             'discount'           => self::format_currency($sale_data['discount'] ?? 0),
             'discount_raw'       => intval($sale_data['discount'] ?? 0),
-            'sale_date'      => current_time('d/m/Y H:i'),
-            'shop_name'      => $site_name,
-            'shop_address'   => get_option('tgs_shop_address', $site_name),
+            'sale_date'      => $order_date,
+            'shop_name'      => $sale_data['shop_name'] ?? $site_name,
+            'shop_address'   => $shop_address,
             'employee_id'    => $sale_data['employee_id'] ?? 0,
         ];
 
@@ -108,6 +128,11 @@ class TGS_Zalo_Hooks {
                 'template_data'    => $template_data,
                 'tracking_id'      => $tracking_id,
             ]);
+        }
+
+        $pos_source_type = defined('TGS_LEDGER_SOURCE_POS') ? intval(TGS_LEDGER_SOURCE_POS) : 1;
+        if (intval($sale_data['source_type'] ?? 0) === $pos_source_type) {
+            TGS_Zalo_Queue::process_queue();
         }
     }
 
@@ -159,17 +184,27 @@ class TGS_Zalo_Hooks {
 
         $blog_id = get_current_blog_id();
         $site_name = get_bloginfo('name');
+        $shop_address = get_option('tgs_shop_address', $site_name);
+        $price = intval(round(floatval($ledger->local_ledger_total_amount ?? 0)));
+        $earned_points = self::calculate_points($price);
 
         $available_data = [
             'customer_name'  => $person->local_ledger_person_name ?? 'Quý khách',
             'customer_phone' => $person->local_ledger_person_phone,
             'customer_id'    => $person_id,
+            'customer_code'  => $person->local_ledger_person_code ?? $person_id,
             'sale_code'      => $ledger->local_ledger_code ?? '',
+            'order_code'     => $ledger->local_ledger_code ?? '',
+            'order_date'     => current_time('d/m/Y H:i'),
+            'price'          => $price,
+            'point'          => $earned_points,
+            'total_point'    => 0,
+            'note'           => self::build_points_note($shop_address, $site_name),
             'total_amount'       => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
             'total_amount_raw'   => intval($ledger->local_ledger_total_amount ?? 0),
             'sale_date'      => current_time('d/m/Y H:i'),
             'shop_name'      => $site_name,
-            'shop_address'   => get_option('tgs_shop_address', $site_name),
+            'shop_address'   => $shop_address,
         ];
 
         $templates = self::get_active_templates('sale_completed');
@@ -249,5 +284,93 @@ class TGS_Zalo_Hooks {
      */
     private static function format_currency($amount) {
         return number_format(floatval($amount), 0, ',', '.') . 'đ';
+    }
+
+    /**
+     * Tạm thời áp dụng rule demo: 1.000đ = 1 điểm.
+     */
+    private static function calculate_points($amount) {
+        return max(0, (int) floor(floatval($amount) / 1000));
+    }
+
+    /**
+     * Ghi chú ngắn, phù hợp giới hạn param template.
+     */
+    private static function build_points_note($shop_address, $site_name) {
+        $location = trim((string) ($shop_address ?: $site_name));
+        $note = 'Tích điểm tại ' . $location;
+
+        return self::truncate_text($note, 30);
+    }
+
+    private static function truncate_text($text, $limit) {
+        $text = trim((string) $text);
+        if ($text === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            if (mb_strlen($text, 'UTF-8') <= $limit) {
+                return $text;
+            }
+
+            return mb_substr($text, 0, $limit, 'UTF-8');
+        }
+
+        if (strlen($text) <= $limit) {
+            return $text;
+        }
+
+        return substr($text, 0, $limit);
+    }
+
+    /**
+     * Seed sẵn template demo tích điểm để bấm tạo đơn POS là có thể gửi ngay.
+     */
+    private static function seed_default_sale_points_template() {
+        if (!defined('TGS_TABLE_ZALO_TEMPLATES')) {
+            return;
+        }
+
+        if (get_site_option('tgs_zalo_seeded_sale_points_template', 0)) {
+            return;
+        }
+
+        global $wpdb;
+
+        $table = TGS_TABLE_ZALO_TEMPLATES;
+        $table_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table));
+        if ($table_exists !== $table) {
+            return;
+        }
+
+        $existing_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM {$table} WHERE zalo_template_id = %s LIMIT 1",
+            '570477'
+        ));
+
+        if (!$existing_id) {
+            $now = current_time('mysql');
+            $wpdb->insert($table, [
+                'zalo_template_id' => '570477',
+                'event_type'       => 'sale_completed',
+                'label'            => 'Thông báo tích điểm POS mặc định',
+                'field_mapping'    => wp_json_encode([
+                    'customer_name' => 'customer_name',
+                    'customer_code' => 'customer_code',
+                    'order_code'    => 'order_code',
+                    'order_date'    => 'order_date',
+                    'price'         => 'price',
+                    'point'         => 'point',
+                    'total_point'   => 'total_point',
+                    'note'          => 'note',
+                ], JSON_UNESCAPED_UNICODE),
+                'is_active'        => 1,
+                'created_at'       => $now,
+                'updated_at'       => $now,
+            ]);
+        }
+
+        update_site_option('tgs_zalo_seeded_sale_points_template', 1);
     }
 }
