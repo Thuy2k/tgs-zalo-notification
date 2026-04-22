@@ -58,16 +58,7 @@ class TGS_Zalo_Hooks {
         }
 
         $shop_address = $sale_data['shop_address'] ?? get_option('tgs_shop_address', $site_name);
-        $order_date = $sale_data['order_date'] ?? 0;
-        if (!is_int($order_date) && !is_float($order_date)) {
-            $parsed_order_date = strtotime((string) $order_date);
-            $order_date = $parsed_order_date ? intval($parsed_order_date) : 0;
-        }
-        if ($order_date <= 0) {
-            $sale_date = $sale_data['sale_date'] ?? '';
-            $parsed_sale_date = strtotime((string) $sale_date);
-            $order_date = $parsed_sale_date ? intval($parsed_sale_date) : current_time('timestamp');
-        }
+        $order_date = self::to_zalo_date_string($sale_data['order_date'] ?? ($sale_data['sale_date'] ?? ''));
         $price = intval(round($sale_data['price'] ?? ($sale_data['total_amount'] ?? 0)));
         $earned_points = isset($sale_data['point'])
             ? intval($sale_data['point'])
@@ -147,7 +138,6 @@ class TGS_Zalo_Hooks {
             TGS_Zalo_Queue::process_queue();
         }
     }
-
     /**
      * Handle ledger status change (for manual approval of non-POS sales)
      *
@@ -211,7 +201,7 @@ class TGS_Zalo_Hooks {
             'customer_code'  => $person->local_ledger_person_code ?? $person_id,
             'sale_code'      => $ledger->local_ledger_code ?? '',
             'order_code'     => $ledger->local_ledger_code ?? '',
-            'order_date'     => current_time('timestamp'),
+            'order_date'     => self::to_zalo_date_string(current_time('timestamp')),
             'price'          => $price,
             'point'          => $earned_points,
             'total_point'    => 0,
@@ -338,6 +328,32 @@ class TGS_Zalo_Hooks {
         }
 
         return substr($text, 0, $limit);
+    }
+
+    /**
+     * Zalo date field supports text format: hh:mm:ss dd/mm/yyyy.
+     */
+    private static function to_zalo_date_string($value) {
+        if (is_numeric($value)) {
+            $timestamp = (float) $value;
+            if ($timestamp <= 0) {
+                return current_time('H:i:s d/m/Y');
+            }
+
+            // Milliseconds -> seconds
+            if ($timestamp >= 1000000000000) {
+                $timestamp = $timestamp / 1000;
+            }
+
+            return wp_date('H:i:s d/m/Y', intval(round($timestamp)));
+        }
+
+        $parsed = strtotime((string) $value);
+        if ($parsed && $parsed > 0) {
+            return wp_date('H:i:s d/m/Y', intval($parsed));
+        }
+
+        return current_time('H:i:s d/m/Y');
     }
 
     private static function is_blog_enabled($blog_id) {
