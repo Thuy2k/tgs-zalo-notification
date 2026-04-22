@@ -214,12 +214,22 @@
         $('#templateLabel').val($btn.data('label'));
         $('#templateEventType').val($btn.data('event'));
         $('#templateZaloId').val($btn.data('zalo-id'));
-        try {
-            $('#templateFieldMapping').val(
-                JSON.stringify(JSON.parse($btn.data('mapping') || '{}'), null, 2)
-            );
-        } catch(e) {
-            $('#templateFieldMapping').val($btn.data('mapping'));
+        var rawMapping = $btn.data('mapping');
+        var mappingObject = {};
+
+        if (rawMapping && typeof rawMapping === 'object') {
+            mappingObject = rawMapping;
+        } else if (typeof rawMapping === 'string' && rawMapping.trim() !== '') {
+            try {
+                mappingObject = JSON.parse(rawMapping);
+            } catch (e) {
+                $('#templateFieldMapping').val(rawMapping);
+                mappingObject = null;
+            }
+        }
+
+        if (mappingObject !== null) {
+            $('#templateFieldMapping').val(JSON.stringify(mappingObject || {}, null, 2));
         }
         $('#templateIsActive').prop('checked', $btn.data('active') == 1);
         $('#formTitle').html('<i class="bx bx-edit me-2 text-warning"></i>Chỉnh sửa Template #' + $btn.data('id'));
