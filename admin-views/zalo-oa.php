@@ -137,6 +137,20 @@ if ($is_network_admin) {
     );
 }
 
+$get_template_param = static function ($template_data_json, $param) {
+    $payload = json_decode((string) $template_data_json, true);
+    if (!is_array($payload) || !array_key_exists($param, $payload)) {
+        return '';
+    }
+
+    $value = $payload[$param];
+    if (is_scalar($value)) {
+        return trim((string) $value);
+    }
+
+    return '';
+};
+
 // Base URL for tabs
 $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
 ?>
@@ -881,6 +895,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                             <th>SĐT</th>
                             <th>Template</th>
                             <th>Trạng thái</th>
+                            <th>Ngày mua (param)</th>
                             <th>Zalo Msg ID</th>
                             <th>Retry</th>
                             <th>Tạo lúc</th>
@@ -889,11 +904,12 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                     </thead>
                     <tbody>
                         <?php if (empty($logs)): ?>
-                            <tr><td colspan="<?php echo $is_network_admin ? 9 : 8; ?>" class="text-center py-4 text-muted">
+                            <tr><td colspan="<?php echo $is_network_admin ? 10 : 9; ?>" class="text-center py-4 text-muted">
                                 <i class="bx bx-inbox" style="font-size: 24px;"></i><br>Không có dữ liệu
                             </td></tr>
                         <?php else: ?>
                             <?php foreach ($logs as $log): ?>
+                            <?php $order_date_param = $get_template_param($log->template_data ?? '', 'order_date'); ?>
                             <tr>
                                 <td><?php echo intval($log->id); ?></td>
                                 <?php if ($is_network_admin): ?><td><span class="badge bg-label-secondary"><?php echo intval($log->blog_id); ?></span></td><?php endif; ?>
@@ -908,6 +924,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                         <span class="badge bg-secondary"><?php echo esc_html($log->status); ?></span>
                                     <?php endif; ?>
                                 </td>
+                                <td><small><?php echo esc_html($order_date_param ?: '-'); ?></small></td>
                                 <td><small class="text-muted"><?php echo esc_html($log->zalo_msg_id ?: '-'); ?></small></td>
                                 <td><?php echo intval($log->retry_count); ?></td>
                                 <td><small><?php echo esc_html($log->created_at); ?></small></td>
@@ -959,6 +976,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                             <th>Site</th>
                             <th>SĐT</th>
                             <th>Template</th>
+                            <th>Ngày mua (param)</th>
                             <th>Lỗi</th>
                             <th>Retry</th>
                             <th>Hành động</th>
@@ -966,11 +984,13 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                     </thead>
                     <tbody>
                         <?php foreach ($failed_queue as $fq): ?>
+                        <?php $order_date_param = $get_template_param($fq->template_data ?? '', 'order_date'); ?>
                         <tr id="failed-row-<?php echo intval($fq->id); ?>">
                             <td><?php echo intval($fq->id); ?></td>
                             <td><span class="badge bg-label-secondary"><?php echo intval($fq->blog_id); ?></span></td>
                             <td><code><?php echo esc_html($fq->phone); ?></code></td>
                             <td><code><?php echo esc_html($fq->zalo_template_id); ?></code></td>
+                            <td><small><?php echo esc_html($order_date_param ?: '-'); ?></small></td>
                             <td><small class="text-danger"><?php echo esc_html(mb_substr($fq->last_error ?? '', 0, 100)); ?></small></td>
                             <td><?php echo intval($fq->retry_count); ?>/<?php echo intval($fq->max_retries); ?></td>
                             <td>

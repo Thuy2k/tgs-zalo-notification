@@ -64,9 +64,7 @@ class TGS_Zalo_Hooks {
             ? intval($sale_data['point'])
             : self::calculate_points($sale_data['total_amount'] ?? 0);
         $total_points = isset($sale_data['total_point']) ? intval($sale_data['total_point']) : 0;
-        $note = !empty($sale_data['note'])
-            ? (string) $sale_data['note']
-            : self::build_points_note($shop_address, $site_name);
+        $note = self::build_points_note($sale_data['note'] ?? '', $shop_address, $site_name);
 
         // Build available data for template mapping
         $available_data = [
@@ -205,7 +203,7 @@ class TGS_Zalo_Hooks {
             'price'          => $price,
             'point'          => $earned_points,
             'total_point'    => 0,
-            'note'           => self::build_points_note($shop_address, $site_name),
+            'note'           => self::build_points_note('', $shop_address, $site_name),
             'total_amount'       => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
             'total_amount_raw'   => intval($ledger->local_ledger_total_amount ?? 0),
             'sale_date'      => current_time('d/m/Y H:i'),
@@ -302,9 +300,20 @@ class TGS_Zalo_Hooks {
     /**
      * Ghi chú ngắn, phù hợp giới hạn param template.
      */
-    private static function build_points_note($shop_address, $site_name) {
-        $location = trim((string) ($shop_address ?: $site_name));
-        $note = 'Tích điểm tại ' . $location;
+    private static function build_points_note($raw_note, $shop_address, $site_name) {
+        $raw_note = trim((string) $raw_note);
+        if ($raw_note !== '') {
+            if (function_exists('mb_strlen')) {
+                if (mb_strlen($raw_note, 'UTF-8') <= 30) {
+                    return $raw_note;
+                }
+            } elseif (strlen($raw_note) <= 30) {
+                return $raw_note;
+            }
+        }
+
+        // Keep note concise to avoid unreadable cut-off on Zalo cards.
+        $note = 'Cảm ơn quý khách đã mua hàng';
 
         return self::truncate_text($note, 30);
     }
