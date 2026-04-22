@@ -16,6 +16,27 @@ $enabled = get_site_option('tgs_zalo_enabled', 0);
 $dev_mode = get_site_option('tgs_zalo_dev_mode', 0);
 $batch_size = get_site_option('tgs_zalo_batch_size', 50);
 $retry_max = get_site_option('tgs_zalo_retry_max', 3);
+$enabled_blog_ids = get_site_option('tgs_zalo_enabled_blog_ids', []);
+$enabled_blog_ids = is_array($enabled_blog_ids) ? array_values(array_unique(array_map('intval', $enabled_blog_ids))) : [];
+$deploy_sites = [];
+if (function_exists('get_sites')) {
+    $site_objects = get_sites([
+        'number'   => 0,
+        'archived' => 0,
+        'deleted'  => 0,
+        'spam'     => 0,
+    ]);
+
+    foreach ($site_objects as $site_object) {
+        $blog = get_blog_details($site_object->blog_id);
+        $deploy_sites[] = [
+            'blog_id'  => intval($site_object->blog_id),
+            'name'     => $blog && !empty($blog->blogname) ? $blog->blogname : ('Shop #' . intval($site_object->blog_id)),
+            'siteurl'  => $blog && !empty($blog->siteurl) ? $blog->siteurl : '',
+            'selected' => in_array(intval($site_object->blog_id), $enabled_blog_ids, true),
+        ];
+    }
+}
 
 $token_status = TGS_Zalo_Token_Manager::get_status();
 $queue_stats = TGS_Zalo_Queue::get_stats();
@@ -129,6 +150,21 @@ $oauth_msg = sanitize_text_field($_GET['msg'] ?? '');
                     <td>
                         <input type="number" name="retry_max" value="<?php echo intval($retry_max); ?>" min="0" max="10" class="small-text">
                         <p class="description">Số lần gửi lại khi thất bại. Backoff: 5 phút → 15 phút → 30 phút.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Triển khai theo shop</th>
+                    <td>
+                        <p class="description">Chỉ các shop được chọn mới gửi Zalo OA tự động. Không chọn shop nào = không gửi.</p>
+                        <div style="max-height:260px;overflow:auto;border:1px solid #ccd0d4;padding:12px;background:#fff;">
+                            <?php foreach ($deploy_sites as $deploy_site): ?>
+                                <label style="display:block;margin-bottom:8px;">
+                                    <input type="checkbox" class="deploy-site-checkbox" name="deploy_blog_ids[]" value="<?php echo intval($deploy_site['blog_id']); ?>" <?php checked($deploy_site['selected']); ?>>
+                                    <strong>#<?php echo intval($deploy_site['blog_id']); ?> - <?php echo esc_html($deploy_site['name']); ?></strong>
+                                    <br><span style="color:#646970;margin-left:22px;"><?php echo esc_html($deploy_site['siteurl']); ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
                     </td>
                 </tr>
             </table>

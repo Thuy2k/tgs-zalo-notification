@@ -193,6 +193,10 @@ class TGS_Zalo_Notification {
         $dev_mode = intval($_POST['dev_mode'] ?? 0);
         $batch_size = max(1, min(100, intval($_POST['batch_size'] ?? 50)));
         $retry_max = max(0, min(10, intval($_POST['retry_max'] ?? 3)));
+        $deploy_blog_ids = array_map('intval', (array) ($_POST['deploy_blog_ids'] ?? []));
+        $deploy_blog_ids = array_values(array_unique(array_filter($deploy_blog_ids, function($blog_id) {
+            return $blog_id > 0;
+        })));
 
         update_site_option('tgs_zalo_app_id', $app_id);
         if (!empty($secret_key) && $secret_key !== '********') {
@@ -202,8 +206,9 @@ class TGS_Zalo_Notification {
         update_site_option('tgs_zalo_dev_mode', $dev_mode);
         update_site_option('tgs_zalo_batch_size', $batch_size);
         update_site_option('tgs_zalo_retry_max', $retry_max);
+        update_site_option('tgs_zalo_enabled_blog_ids', $deploy_blog_ids);
 
-        wp_send_json_success('Đã lưu cài đặt.');
+        wp_send_json_success('Đã lưu cài đặt. Shop được triển khai: ' . count($deploy_blog_ids));
     }
 
     /**

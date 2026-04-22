@@ -20,6 +20,8 @@ $token_status = TGS_Zalo_Token_Manager::get_status();
 $queue_stats = TGS_Zalo_Queue::get_stats();
 $enabled = get_site_option('tgs_zalo_enabled', 0);
 $dev_mode = get_site_option('tgs_zalo_dev_mode', 0);
+$enabled_blog_ids = get_site_option('tgs_zalo_enabled_blog_ids', []);
+$enabled_blog_ids = is_array($enabled_blog_ids) ? array_values(array_unique(array_map('intval', $enabled_blog_ids))) : [];
 
 // === Data for Settings tab ===
 $app_id = get_site_option('tgs_zalo_app_id', '');
@@ -27,6 +29,29 @@ $secret_key = get_site_option('tgs_zalo_secret_key', '');
 $batch_size = get_site_option('tgs_zalo_batch_size', 50);
 $retry_max = get_site_option('tgs_zalo_retry_max', 3);
 $oauth_redirect_uri = admin_url('?tgs_zalo_oauth_callback=1');
+$deploy_sites = [];
+if ($is_network_admin && function_exists('get_sites')) {
+    $site_objects = get_sites([
+        'number'   => 0,
+        'archived' => 0,
+        'deleted'  => 0,
+        'spam'     => 0,
+    ]);
+
+    foreach ($site_objects as $site_object) {
+        $blog = get_blog_details($site_object->blog_id);
+        $deploy_sites[] = [
+            'blog_id'  => intval($site_object->blog_id),
+            'name'     => $blog && !empty($blog->blogname) ? $blog->blogname : ('Shop #' . intval($site_object->blog_id)),
+            'siteurl'  => $blog && !empty($blog->siteurl) ? $blog->siteurl : '',
+            'selected' => in_array(intval($site_object->blog_id), $enabled_blog_ids, true),
+        ];
+    }
+
+    usort($deploy_sites, function ($left, $right) {
+        return strcasecmp($left['name'], $right['name']);
+    });
+}
 
 // Flash messages
 $oauth_result = sanitize_text_field($_GET['zalo_oauth'] ?? '');
@@ -391,6 +416,49 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" name="dev_mode" value="1"
                                            style="width: 3rem; height: 1.5rem;" <?php checked($dev_mode, 1); ?>>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0 fw-semibold"><i class="bx bx-store me-2 text-info"></i>Phạm vi triển khai theo shop</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-warning border-0 py-2 mb-3" style="font-size: 13px;">
+                                <i class="bx bx-shield-quarter me-1"></i>
+                                Chỉ các shop được chọn mới gửi Zalo OA tự động. Nếu không chọn shop nào, hệ thống sẽ <strong>không gửi</strong> để tránh bung toàn mạng.
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div class="text-muted small">Đã chọn: <strong id="selectedDeploySiteCount"><?php echo count($enabled_blog_ids); ?></strong> / <?php echo count($deploy_sites); ?> shop</div>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectAllDeploySites">Chọn tất cả</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearDeploySites">Bỏ chọn</button>
+                                </div>
+                            </div>
+
+                            <div class="border rounded p-3" style="max-height: 320px; overflow:auto;">
+                                <div class="row g-2">
+                                    <?php foreach ($deploy_sites as $deploy_site): ?>
+                                    <div class="col-md-6">
+                                        <label class="border rounded p-2 d-block h-100" style="cursor:pointer;">
+                                            <div class="form-check mb-1">
+                                                <input class="form-check-input deploy-site-checkbox" type="checkbox"
+                                                       name="deploy_blog_ids[]"
+                                                       value="<?php echo intval($deploy_site['blog_id']); ?>"
+                                                       <?php checked($deploy_site['selected']); ?>>
+                                                <span class="form-check-label fw-semibold">
+                                                    #<?php echo intval($deploy_site['blog_id']); ?> - <?php echo esc_html($deploy_site['name']); ?>
+                                                </span>
+                                            </div>
+                                            <div class="small text-muted ps-4" style="word-break: break-all;">
+                                                <?php echo esc_html($deploy_site['siteurl']); ?>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    <?php endforeach; ?>
                                 </div>
                             </div>
                         </div>

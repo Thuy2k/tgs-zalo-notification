@@ -8,6 +8,11 @@
     var ajaxUrl = tgsZaloAdmin.ajaxUrl;
     var nonce   = tgsZaloAdmin.nonce;
 
+    function updateDeploySiteCounter() {
+        var count = $('.deploy-site-checkbox:checked').length;
+        $('#selectedDeploySiteCount').text(count);
+    }
+
     /**
      * Show alert notice (Bootstrap style)
      */
@@ -45,6 +50,7 @@
             dev_mode: $form.find('[name=dev_mode]').is(':checked') ? 1 : 0,
             batch_size: $form.find('[name=batch_size]').val(),
             retry_max: $form.find('[name=retry_max]').val(),
+            deploy_blog_ids: $form.find('[name="deploy_blog_ids[]"]:checked').map(function() { return $(this).val(); }).get(),
         }, function(res) {
             $btn.prop('disabled', false);
             showNotice(res.success ? res.data : (res.data || 'Lỗi không xác định'), res.success ? 'success' : 'danger');
@@ -53,6 +59,20 @@
             showNotice('Lỗi kết nối server', 'danger');
         });
     });
+
+    $(document).on('change', '.deploy-site-checkbox', updateDeploySiteCounter);
+
+    $(document).on('click', '#btnSelectAllDeploySites', function() {
+        $('.deploy-site-checkbox').prop('checked', true);
+        updateDeploySiteCounter();
+    });
+
+    $(document).on('click', '#btnClearDeploySites', function() {
+        $('.deploy-site-checkbox').prop('checked', false);
+        updateDeploySiteCounter();
+    });
+
+    updateDeploySiteCounter();
 
     /**
      * Test Connection (both buttons)

@@ -44,6 +44,9 @@ class TGS_Zalo_Hooks {
         }
 
         $blog_id = $sale_data['blog_id'] ?? get_current_blog_id();
+        if (!self::is_blog_enabled($blog_id)) {
+            return;
+        }
 
         // Get shop/site name for template
         $site_name = '';
@@ -183,6 +186,10 @@ class TGS_Zalo_Hooks {
         if (!$person || empty($person->local_ledger_person_phone)) return;
 
         $blog_id = get_current_blog_id();
+        if (!self::is_blog_enabled($blog_id)) {
+            return;
+        }
+
         $site_name = get_bloginfo('name');
         $shop_address = get_option('tgs_shop_address', $site_name);
         $price = intval(round(floatval($ledger->local_ledger_total_amount ?? 0)));
@@ -322,6 +329,24 @@ class TGS_Zalo_Hooks {
         }
 
         return substr($text, 0, $limit);
+    }
+
+    private static function is_blog_enabled($blog_id) {
+        $enabled_blog_ids = get_site_option('tgs_zalo_enabled_blog_ids', []);
+
+        if (!is_array($enabled_blog_ids)) {
+            $enabled_blog_ids = [];
+        }
+
+        $enabled_blog_ids = array_values(array_unique(array_filter(array_map('intval', $enabled_blog_ids), function($site_blog_id) {
+            return $site_blog_id > 0;
+        })));
+
+        if (empty($enabled_blog_ids)) {
+            return false;
+        }
+
+        return in_array(intval($blog_id), $enabled_blog_ids, true);
     }
 
     /**
