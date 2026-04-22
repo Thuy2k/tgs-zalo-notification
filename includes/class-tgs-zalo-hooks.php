@@ -58,7 +58,16 @@ class TGS_Zalo_Hooks {
         }
 
         $shop_address = $sale_data['shop_address'] ?? get_option('tgs_shop_address', $site_name);
-        $order_date = $sale_data['order_date'] ?? ($sale_data['sale_date'] ?? current_time('d/m/Y H:i'));
+        $order_date = $sale_data['order_date'] ?? 0;
+        if (!is_int($order_date) && !is_float($order_date)) {
+            $parsed_order_date = strtotime((string) $order_date);
+            $order_date = $parsed_order_date ? intval($parsed_order_date) : 0;
+        }
+        if ($order_date <= 0) {
+            $sale_date = $sale_data['sale_date'] ?? '';
+            $parsed_sale_date = strtotime((string) $sale_date);
+            $order_date = $parsed_sale_date ? intval($parsed_sale_date) : current_time('timestamp');
+        }
         $price = intval(round($sale_data['price'] ?? ($sale_data['total_amount'] ?? 0)));
         $earned_points = isset($sale_data['point'])
             ? intval($sale_data['point'])
@@ -88,7 +97,7 @@ class TGS_Zalo_Hooks {
             'total_items'    => $sale_data['total_items'] ?? 0,
             'discount'           => self::format_currency($sale_data['discount'] ?? 0),
             'discount_raw'       => intval($sale_data['discount'] ?? 0),
-            'sale_date'      => $order_date,
+            'sale_date'      => current_time('d/m/Y H:i'),
             'shop_name'      => $sale_data['shop_name'] ?? $site_name,
             'shop_address'   => $shop_address,
             'employee_id'    => $sale_data['employee_id'] ?? 0,
@@ -202,7 +211,7 @@ class TGS_Zalo_Hooks {
             'customer_code'  => $person->local_ledger_person_code ?? $person_id,
             'sale_code'      => $ledger->local_ledger_code ?? '',
             'order_code'     => $ledger->local_ledger_code ?? '',
-            'order_date'     => current_time('d/m/Y H:i'),
+            'order_date'     => current_time('timestamp'),
             'price'          => $price,
             'point'          => $earned_points,
             'total_point'    => 0,

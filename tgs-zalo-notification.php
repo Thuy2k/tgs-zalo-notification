@@ -414,7 +414,7 @@ class TGS_Zalo_Notification {
                 'customer_code'  => 'KH-001',
                 'sale_code'      => 'TEST-' . date('YmdHis'),
                 'order_code'     => 'TEST-' . date('YmdHis'),
-                'order_date'     => date('d/m/Y H:i'),
+                'order_date'     => current_time('timestamp'),
                 'export_code'    => 'PX-TEST-' . date('YmdHis'),
                 'price'          => 1500000,
                 'point'          => 1500,
