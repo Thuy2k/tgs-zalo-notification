@@ -63,7 +63,9 @@ class TGS_Zalo_Hooks {
         $earned_points = isset($sale_data['point'])
             ? intval($sale_data['point'])
             : self::calculate_points($sale_data['total_amount'] ?? 0);
-        $total_points = isset($sale_data['total_point']) ? intval($sale_data['total_point']) : 0;
+        $customer_wp_user_id = intval($sale_data['customer_wp_user_id'] ?? 0);
+        $base_points = self::get_current_wallet_points($phone, $customer_wp_user_id);
+        $total_points = $base_points + max(0, intval($earned_points));
         $note = self::build_points_note($sale_data['note'] ?? '', $shop_address, $site_name);
 
         // Build available data for template mapping
@@ -191,6 +193,9 @@ class TGS_Zalo_Hooks {
         $shop_address = get_option('tgs_shop_address', $site_name);
         $price = intval(round(floatval($ledger->local_ledger_total_amount ?? 0)));
         $earned_points = self::calculate_points($price);
+        $customer_wp_user_id = intval($person->user_wp_id ?? 0);
+        $base_points = self::get_current_wallet_points($person->local_ledger_person_phone, $customer_wp_user_id);
+        $total_points = $base_points + max(0, intval($earned_points));
 
         $available_data = [
             'customer_name'  => $person->local_ledger_person_name ?? 'Quý khách',
@@ -202,7 +207,7 @@ class TGS_Zalo_Hooks {
             'order_date'     => self::to_zalo_date_string(current_time('timestamp')),
             'price'          => $price,
             'point'          => $earned_points,
-            'total_point'    => 0,
+            'total_point'    => $total_points,
             'note'           => self::build_points_note('', $shop_address, $site_name),
             'total_amount'       => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
             'total_amount_raw'   => intval($ledger->local_ledger_total_amount ?? 0),
@@ -381,6 +386,98 @@ class TGS_Zalo_Hooks {
         }
 
         return in_array(intval($blog_id), $enabled_blog_ids, true);
+    }
+
+    /**
+     * Resolve current wallet points from wp_wallet.balance by phone/wp_user_id.
+     */
+    private static function get_current_wallet_points($phone, $wp_user_id = 0) {
+        global $wpdb;
+
+        $resolved_user_id = intval($wp_user_id);
+        if ($resolved_user_id <= 0) {
+            $resolved_user_id = self::find_wp_user_id_by_phone($phone);
+        }
+
+        if ($resolved_user_id <= 0) {
+            return 0;
+        }
+
+        $wallet_table = $wpdb->base_prefix . 'wallet';
+        $balance = $wpdb->get_var($wpdb->prepare(
+            "SELECT balance FROM {$wallet_table} WHERE user_id = %d ORDER BY id DESC LIMIT 1",
+            $resolved_user_id
+        ));
+
+        if ($balance === null) {
+            return 0;
+        }
+
+        return intval(round(floatval($balance)));
+    }
+
+    /**
+     * Find WP user ID by phone variants.
+     */
+    private static function find_wp_user_id_by_phone($phone) {
+        global $wpdb;
+
+        $variants = self::build_phone_variants($phone);
+        if (empty($variants)) {
+            return 0;
+        }
+
+        $usermeta_table = $wpdb->base_prefix . 'usermeta';
+        $users_table = $wpdb->base_prefix . 'users';
+        $placeholders = implode(',', array_fill(0, count($variants), '%s'));
+
+        $meta_sql = "SELECT user_id
+                     FROM {$usermeta_table}
+                     WHERE meta_key = 'billing_phone'
+                       AND meta_value IN ({$placeholders})
+                     LIMIT 1";
+        $meta_query = $wpdb->prepare($meta_sql, $variants);
+        $meta_user_id = intval($wpdb->get_var($meta_query));
+        if ($meta_user_id > 0) {
+            return $meta_user_id;
+        }
+
+        $user_sql = "SELECT ID
+                     FROM {$users_table}
+                     WHERE user_login IN ({$placeholders})
+                     LIMIT 1";
+        $user_query = $wpdb->prepare($user_sql, $variants);
+        $user_id = intval($wpdb->get_var($user_query));
+
+        return $user_id > 0 ? $user_id : 0;
+    }
+
+    /**
+     * Build phone variants for matching (0xxx, 84xxx, +84xxx).
+     */
+    private static function build_phone_variants($phone) {
+        $phone = trim((string) $phone);
+        if ($phone === '') {
+            return [];
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+        $variants = [$phone];
+
+        if (!empty($digits)) {
+            $variants[] = $digits;
+
+            if (strpos($digits, '84') === 0 && strlen($digits) > 2) {
+                $variants[] = '0' . substr($digits, 2);
+            }
+
+            if (strpos($digits, '0') === 0 && strlen($digits) > 1) {
+                $variants[] = '84' . substr($digits, 1);
+                $variants[] = '+84' . substr($digits, 1);
+            }
+        }
+
+        return array_values(array_unique(array_filter($variants)));
     }
 
     /**
