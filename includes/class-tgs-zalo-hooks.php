@@ -7,6 +7,9 @@ if (!defined('ABSPATH')) exit;
 
 class TGS_Zalo_Hooks {
 
+    private const DEFAULT_SALE_TEMPLATE_ID = '577154';
+    private const LEGACY_SALE_TEMPLATE_ID = '570477';
+
     /**
      * Register hooks
      */
@@ -58,6 +61,7 @@ class TGS_Zalo_Hooks {
         }
 
         $shop_address = $sale_data['shop_address'] ?? get_option('tgs_shop_address', $site_name);
+        $order_code = (string) ($sale_data['order_code'] ?? ($sale_data['sale_code'] ?? ''));
         $order_date = self::to_zalo_date_string($sale_data['order_date'] ?? ($sale_data['sale_date'] ?? ''));
         $price = intval(round($sale_data['price'] ?? ($sale_data['total_amount'] ?? 0)));
         $earned_points = isset($sale_data['point'])
@@ -76,7 +80,9 @@ class TGS_Zalo_Hooks {
             'customer_id'    => $sale_data['customer_id'] ?? '',
             'customer_code'  => $sale_data['customer_code'] ?? ($sale_data['customer_id'] ?? ''),
             'sale_code'      => $sale_data['sale_code'] ?? '',
-            'order_code'     => $sale_data['order_code'] ?? ($sale_data['sale_code'] ?? ''),
+            'order_code'     => $order_code,
+            'blog_id'        => (string) $blog_id,
+            'order_code_url' => self::build_order_lookup_url($blog_id, $order_code),
             'export_code'    => $sale_data['export_code'] ?? '',
             'order_date'     => $order_date,
             'price'          => $price,
@@ -191,6 +197,7 @@ class TGS_Zalo_Hooks {
 
         $site_name = get_bloginfo('name');
         $shop_address = get_option('tgs_shop_address', $site_name);
+        $order_code = (string) ($ledger->local_ledger_code ?? '');
         $price = intval(round(floatval($ledger->local_ledger_total_amount ?? 0)));
         $earned_points = self::calculate_points($price);
         $customer_wp_user_id = intval($person->user_wp_id ?? 0);
@@ -202,8 +209,10 @@ class TGS_Zalo_Hooks {
             'customer_phone' => $person->local_ledger_person_phone,
             'customer_id'    => $person_id,
             'customer_code'  => $person->local_ledger_person_code ?? $person_id,
-            'sale_code'      => $ledger->local_ledger_code ?? '',
-            'order_code'     => $ledger->local_ledger_code ?? '',
+            'sale_code'      => $order_code,
+            'order_code'     => $order_code,
+            'blog_id'        => (string) $blog_id,
+            'order_code_url' => self::build_order_lookup_url($blog_id, $order_code),
             'order_date'     => self::to_zalo_date_string(current_time('timestamp')),
             'price'          => $price,
             'point'          => $earned_points,
@@ -370,6 +379,59 @@ class TGS_Zalo_Hooks {
         return current_time('H:i:s d/m/Y');
     }
 
+    /**
+     * Build invoice lookup URL that can auto-fill invoice code on public page.
+     */
+    private static function build_order_lookup_url($blog_id, $order_code) {
+        $blog_id = intval($blog_id);
+        $order_code = trim((string) $order_code);
+
+        if ($order_code === '') {
+            return '';
+        }
+
+        return add_query_arg([
+            'blog_id'    => $blog_id,
+            'order_code' => $order_code,
+        ], home_url('/tra-cuu-hoa-don-dien-tu/'));
+    }
+
+    /**
+     * Default field mapping for sale_completed event.
+     */
+    private static function get_default_sale_field_mapping() {
+        return [
+            'customer_name'  => 'customer_name',
+            'customer_code'  => 'customer_code',
+            'order_code'     => 'order_code',
+            'order_date'     => 'order_date',
+            'price'          => 'price',
+            'point'          => 'point',
+            'total_point'    => 'total_point',
+            'note'           => 'note',
+            'blog_id'        => 'blog_id',
+            'order_code_url' => 'order_code_url',
+        ];
+    }
+
+    /**
+     * Merge missing default keys into existing mapping.
+     */
+    private static function merge_default_sale_field_mapping($raw_mapping) {
+        $mapping = json_decode((string) $raw_mapping, true);
+        if (!is_array($mapping)) {
+            $mapping = [];
+        }
+
+        foreach (self::get_default_sale_field_mapping() as $zalo_param => $data_key) {
+            if (!isset($mapping[$zalo_param])) {
+                $mapping[$zalo_param] = $data_key;
+            }
+        }
+
+        return wp_json_encode($mapping, JSON_UNESCAPED_UNICODE);
+    }
+
     private static function is_blog_enabled($blog_id) {
         $enabled_blog_ids = get_site_option('tgs_zalo_enabled_blog_ids', []);
 
@@ -488,10 +550,6 @@ class TGS_Zalo_Hooks {
             return;
         }
 
-        if (get_site_option('tgs_zalo_seeded_sale_points_template', 0)) {
-            return;
-        }
-
         global $wpdb;
 
         $table = TGS_TABLE_ZALO_TEMPLATES;
@@ -500,27 +558,66 @@ class TGS_Zalo_Hooks {
             return;
         }
 
-        $existing_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM {$table} WHERE zalo_template_id = %s LIMIT 1",
-            '570477'
+        $default_mapping_json = wp_json_encode(self::get_default_sale_field_mapping(), JSON_UNESCAPED_UNICODE);
+
+        $default_template = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, field_mapping
+             FROM {$table}
+             WHERE event_type = %s AND zalo_template_id = %s
+             ORDER BY id ASC
+             LIMIT 1",
+            'sale_completed',
+            self::DEFAULT_SALE_TEMPLATE_ID
         ));
 
-        if (!$existing_id) {
+        if ($default_template) {
+            $wpdb->update(
+                $table,
+                [
+                    'field_mapping' => self::merge_default_sale_field_mapping($default_template->field_mapping),
+                    'updated_at'    => current_time('mysql'),
+                ],
+                ['id' => intval($default_template->id)],
+                ['%s', '%s'],
+                ['%d']
+            );
+            update_site_option('tgs_zalo_seeded_sale_points_template', 1);
+            return;
+        }
+
+        $legacy_template = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, field_mapping
+             FROM {$table}
+             WHERE event_type = %s AND zalo_template_id = %s
+             ORDER BY id ASC
+             LIMIT 1",
+            'sale_completed',
+            self::LEGACY_SALE_TEMPLATE_ID
+        ));
+
+        if ($legacy_template) {
+            $wpdb->update(
+                $table,
+                [
+                    'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
+                    'field_mapping'    => self::merge_default_sale_field_mapping($legacy_template->field_mapping),
+                    'updated_at'       => current_time('mysql'),
+                ],
+                ['id' => intval($legacy_template->id)],
+                ['%s', '%s', '%s'],
+                ['%d']
+            );
+            update_site_option('tgs_zalo_seeded_sale_points_template', 1);
+            return;
+        }
+
+        if (!get_site_option('tgs_zalo_seeded_sale_points_template', 0)) {
             $now = current_time('mysql');
             $wpdb->insert($table, [
-                'zalo_template_id' => '570477',
+                'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
                 'event_type'       => 'sale_completed',
                 'label'            => 'Thông báo tích điểm POS mặc định',
-                'field_mapping'    => wp_json_encode([
-                    'customer_name' => 'customer_name',
-                    'customer_code' => 'customer_code',
-                    'order_code'    => 'order_code',
-                    'order_date'    => 'order_date',
-                    'price'         => 'price',
-                    'point'         => 'point',
-                    'total_point'   => 'total_point',
-                    'note'          => 'note',
-                ], JSON_UNESCAPED_UNICODE),
+                'field_mapping'    => $default_mapping_json,
                 'is_active'        => 1,
                 'created_at'       => $now,
                 'updated_at'       => $now,

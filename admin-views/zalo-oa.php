@@ -73,6 +73,8 @@ $available_fields = [
     'customer_code'  => 'Mã khách hàng dùng cho template tích điểm',
     'sale_code'      => 'Mã đơn hàng',
     'order_code'     => 'Mã đơn hàng cho template Zalo',
+    'blog_id'        => 'ID website/shop đang phát sinh đơn',
+    'order_code_url' => 'Link tra cứu hóa đơn (đã kèm order_code và blog_id)',
     'order_date'     => 'Ngày bán cho template Zalo (VD: 21/04/2026 hoặc 14:30:00 21/04/2026)',
     'export_code'    => 'Mã phiếu xuất',
     'price'          => 'Giá trị đơn hàng cuối cùng (số thuần, dùng cho number)',
@@ -706,7 +708,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                     <strong>Mẫu:</strong>
                                     <code class="cursor-pointer text-primary" id="btnSampleMapping"
                                           title="Click để điền mẫu"
-                                        style="cursor: pointer;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount_raw", "date": "sale_date"}</code>
+                                        style="cursor: pointer;">{"customer_name": "customer_name", "order_code": "order_code", "blog_id": "blog_id", "order_code_url": "order_code_url", "amount": "total_amount_raw", "date": "sale_date"}</code>
                                     <br>Giá trị tĩnh: <code>{"status": "static:Đã thanh toán"}</code>
                                 </div>
                             </div>
@@ -1093,7 +1095,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                     <li>Template ID: (paste từ bước 2)</li>
                                     <li>
                                         Field Mapping mẫu:<br>
-                                        <code style="font-size: 12px;">{"customer_name": "customer_name", "order_code": "sale_code", "amount": "total_amount_raw", "date": "sale_date", "status": "static:Đã thanh toán"}</code>
+                                        <code style="font-size: 12px;">{"customer_name": "customer_name", "order_code": "order_code", "blog_id": "blog_id", "order_code_url": "order_code_url", "amount": "total_amount_raw", "date": "sale_date", "status": "static:Đã thanh toán"}</code>
                                     </li>
                                 </ul>
                             </li>

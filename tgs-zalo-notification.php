@@ -402,6 +402,7 @@ class TGS_Zalo_Notification {
 
             $zalo_template_id = $template->zalo_template_id;
             $template_label = $template->label;
+            $test_order_code = 'HD' . get_current_blog_id() . '_TEST' . date('His');
 
             // Build data from mapping with sample values
             $field_mapping = json_decode($template->field_mapping, true) ?: [];
@@ -412,8 +413,13 @@ class TGS_Zalo_Notification {
                 'customer_email' => 'test@example.com',
                 'customer_id'    => 'KH-001',
                 'customer_code'  => 'KH-001',
-                'sale_code'      => 'TEST-' . date('YmdHis'),
-                'order_code'     => 'TEST-' . date('YmdHis'),
+                'sale_code'      => $test_order_code,
+                'order_code'     => $test_order_code,
+                'blog_id'        => (string) get_current_blog_id(),
+                'order_code_url' => add_query_arg([
+                    'blog_id'    => get_current_blog_id(),
+                    'order_code' => $test_order_code,
+                ], home_url('/tra-cuu-hoa-don-dien-tu/')),
                 'order_date'     => date('H:i:s d/m/Y'),
                 'export_code'    => 'PX-TEST-' . date('YmdHis'),
                 'price'          => 1500000,

@@ -130,7 +130,9 @@
     $(document).on('click', '#btnSampleMapping', function() {
         var sample = {
             "customer_name": "customer_name",
-            "order_code": "sale_code",
+            "order_code": "order_code",
+            "blog_id": "blog_id",
+            "order_code_url": "order_code_url",
             "amount": "total_amount_raw",
             "date": "sale_date",
             "status": "static:Đã thanh toán"
@@ -391,9 +393,12 @@
      */
     $(document).on('click', '#btnFillSampleData', function(e) {
         e.preventDefault();
+        var sampleCode = 'HD1_TEST001';
         var sample = {
             "customer_name": "Nguyen Van A",
-            "order_code": "DH-TEST-001",
+            "order_code": sampleCode,
+            "blog_id": "1",
+            "order_code_url": window.location.origin + '/tra-cuu-hoa-don-dien-tu/?blog_id=1&order_code=' + encodeURIComponent(sampleCode),
             "amount": 1500000,
             "date": new Date().toLocaleDateString('vi-VN') + ' ' + new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'}),
             "status": "Đã thanh toán"
@@ -418,10 +423,14 @@
                 var parsed = typeof mapping === 'string' ? JSON.parse(mapping) : mapping;
                 // Convert mapping to sample data
                 var sampleData = {};
+                var sampleCode = 'HD1_TEST001';
                 var sampleValues = {
                     'customer_name': 'Nguyen Van A',
                     'customer_phone': '0912345678',
-                    'sale_code': 'DH-TEST-001',
+                    'sale_code': sampleCode,
+                    'order_code': sampleCode,
+                    'blog_id': '1',
+                    'order_code_url': window.location.origin + '/tra-cuu-hoa-don-dien-tu/?blog_id=1&order_code=' + encodeURIComponent(sampleCode),
                     'export_code': 'PX-TEST-001',
                     'total_amount': '1.500.000đ',
                     'total_amount_raw': 1500000,
