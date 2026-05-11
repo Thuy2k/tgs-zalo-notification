@@ -91,6 +91,10 @@ $available_fields = [
     'shop_address'   => 'Địa chỉ cửa hàng',
 ];
 
+if (class_exists('TGS_Zalo_Hooks')) {
+    TGS_Zalo_Hooks::sync_default_sale_points_template();
+}
+
 // === Data for Log tab ===
 $log_table = TGS_TABLE_ZALO_MESSAGE_LOG;
 $queue_table = TGS_TABLE_ZALO_MESSAGE_QUEUE;

@@ -8,7 +8,6 @@ if (!defined('ABSPATH')) exit;
 class TGS_Zalo_Hooks {
 
     private const DEFAULT_SALE_TEMPLATE_ID = '577154';
-    private const LEGACY_SALE_TEMPLATE_ID = '570477';
 
     /**
      * Register hooks
@@ -20,7 +19,7 @@ class TGS_Zalo_Hooks {
         // Hook into manual ticket approval (optional - for non-POS sales)
         add_action('tgs_ledger_status_changed', [__CLASS__, 'on_ledger_status_changed'], 10, 3);
 
-        self::seed_default_sale_points_template();
+        self::sync_default_sale_points_template();
     }
 
     /**
@@ -263,6 +262,14 @@ class TGS_Zalo_Hooks {
     private static function get_active_templates($event_type) {
         global $wpdb;
         $table = TGS_TABLE_ZALO_TEMPLATES;
+
+        if ($event_type === 'sale_completed') {
+            return $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$table} WHERE event_type = %s AND is_active = 1 AND zalo_template_id = %s",
+                $event_type,
+                self::DEFAULT_SALE_TEMPLATE_ID
+            ));
+        }
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE event_type = %s AND is_active = 1",
@@ -545,7 +552,7 @@ class TGS_Zalo_Hooks {
     /**
      * Seed sẵn template demo tích điểm để bấm tạo đơn POS là có thể gửi ngay.
      */
-    private static function seed_default_sale_points_template() {
+    public static function sync_default_sale_points_template() {
         if (!defined('TGS_TABLE_ZALO_TEMPLATES')) {
             return;
         }
@@ -560,53 +567,29 @@ class TGS_Zalo_Hooks {
 
         $default_mapping_json = wp_json_encode(self::get_default_sale_field_mapping(), JSON_UNESCAPED_UNICODE);
 
-        $default_template = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, field_mapping
+        $sale_templates = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, zalo_template_id, field_mapping
              FROM {$table}
-             WHERE event_type = %s AND zalo_template_id = %s
-             ORDER BY id ASC
-             LIMIT 1",
-            'sale_completed',
-            self::DEFAULT_SALE_TEMPLATE_ID
+             WHERE event_type = %s
+             ORDER BY id ASC",
+            'sale_completed'
         ));
 
-        if ($default_template) {
-            $wpdb->update(
-                $table,
-                [
-                    'field_mapping' => self::merge_default_sale_field_mapping($default_template->field_mapping),
-                    'updated_at'    => current_time('mysql'),
-                ],
-                ['id' => intval($default_template->id)],
-                ['%s', '%s'],
-                ['%d']
-            );
-            update_site_option('tgs_zalo_seeded_sale_points_template', 1);
-            return;
-        }
+        if (!empty($sale_templates)) {
+            foreach ($sale_templates as $template) {
+                $wpdb->update(
+                    $table,
+                    [
+                        'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
+                        'field_mapping'    => self::merge_default_sale_field_mapping($template->field_mapping),
+                        'updated_at'       => current_time('mysql'),
+                    ],
+                    ['id' => intval($template->id)],
+                    ['%s', '%s', '%s'],
+                    ['%d']
+                );
+            }
 
-        $legacy_template = $wpdb->get_row($wpdb->prepare(
-            "SELECT id, field_mapping
-             FROM {$table}
-             WHERE event_type = %s AND zalo_template_id = %s
-             ORDER BY id ASC
-             LIMIT 1",
-            'sale_completed',
-            self::LEGACY_SALE_TEMPLATE_ID
-        ));
-
-        if ($legacy_template) {
-            $wpdb->update(
-                $table,
-                [
-                    'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
-                    'field_mapping'    => self::merge_default_sale_field_mapping($legacy_template->field_mapping),
-                    'updated_at'       => current_time('mysql'),
-                ],
-                ['id' => intval($legacy_template->id)],
-                ['%s', '%s', '%s'],
-                ['%d']
-            );
             update_site_option('tgs_zalo_seeded_sale_points_template', 1);
             return;
         }

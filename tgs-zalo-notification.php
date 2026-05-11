@@ -61,6 +61,7 @@ class TGS_Zalo_Notification {
 
         // Sale hook listener
         TGS_Zalo_Hooks::register();
+        TGS_Zalo_Hooks::sync_default_sale_points_template();
 
         // Admin assets
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
@@ -254,6 +255,8 @@ class TGS_Zalo_Notification {
             wp_send_json_error('Unauthorized');
         }
 
+        TGS_Zalo_Hooks::sync_default_sale_points_template();
+
         global $wpdb;
         $table = TGS_TABLE_ZALO_TEMPLATES;
 
@@ -272,6 +275,10 @@ class TGS_Zalo_Notification {
         $decoded = json_decode($field_mapping, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
             wp_send_json_error('Field mapping JSON không hợp lệ: ' . json_last_error_msg());
+        }
+
+        if ($event_type === 'sale_completed') {
+            $zalo_template_id = '577154';
         }
 
         if (!is_array($decoded)) {
