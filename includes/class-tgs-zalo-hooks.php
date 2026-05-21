@@ -155,8 +155,9 @@ class TGS_Zalo_Hooks {
             error_log('[TGS Zalo] Enqueued template #' . $template->id . ' provider=' . $provider . ' tracking=' . $tracking_id);
         }
 
-        // Xử lý queue ngay lập tức (không chờ cron)
-        // — đặt ngoài vòng lặp để gửi sau khi enqueue đủ hết
+        // Gửi ngay sau khi enqueue — ignore_user_abort đảm bảo PHP không bị kill
+        // dù POS client đã nhận response và disconnect
+        ignore_user_abort(true);
         TGS_Zalo_Queue::process_queue();
     }
     /**
