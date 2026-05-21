@@ -37,13 +37,16 @@ class TGS_Zalo_API {
             $payload['mode'] = 'development';
         }
 
+        $body_json = wp_json_encode($payload);
+        error_log('[TGS Zalo API] Sending payload: ' . $body_json);
+
         $response = wp_remote_post(TGS_ZALO_ZNS_URL, [
             'timeout' => 30,
             'headers' => [
                 'access_token'  => $access_token,
                 'Content-Type'  => 'application/json',
             ],
-            'body' => wp_json_encode($payload),
+            'body' => $body_json,
         ]);
 
         if (is_wp_error($response)) {
@@ -51,7 +54,9 @@ class TGS_Zalo_API {
             return $response;
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $raw_body = wp_remote_retrieve_body($response);
+        error_log('[TGS Zalo API] Response: ' . $raw_body);
+        $body = json_decode($raw_body, true);
         $error_code = intval($body['error'] ?? -1);
 
         // Token expired - try refresh and retry once

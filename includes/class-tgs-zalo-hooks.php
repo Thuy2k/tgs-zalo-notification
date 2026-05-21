@@ -380,13 +380,14 @@ class TGS_Zalo_Hooks {
     }
 
     /**
-     * Zalo date field supports text format: hh:mm:ss dd/mm/yyyy.
+     * Zalo date type field requires Unix timestamp in milliseconds (integer).
+     * Returns integer ms timestamp.
      */
     private static function to_zalo_date_string($value) {
         if (is_numeric($value)) {
             $timestamp = (float) $value;
             if ($timestamp <= 0) {
-                return current_time('d/m/Y H:i:s');
+                return current_time('H:i:s d/m/Y');
             }
 
             // Milliseconds -> seconds
@@ -394,15 +395,15 @@ class TGS_Zalo_Hooks {
                 $timestamp = $timestamp / 1000;
             }
 
-            return wp_date('d/m/Y H:i:s', intval(round($timestamp)));
+            return wp_date('H:i:s d/m/Y', intval(round($timestamp)));
         }
 
         $parsed = strtotime((string) $value);
         if ($parsed && $parsed > 0) {
-            return wp_date('d/m/Y H:i:s', intval($parsed));
+            return wp_date('H:i:s d/m/Y', intval($parsed));
         }
 
-        return current_time('d/m/Y H:i:s');
+        return current_time('H:i:s d/m/Y');
     }
 
     /**
