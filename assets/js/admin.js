@@ -13,6 +13,11 @@
         $('#selectedDeploySiteCount').text(count);
     }
 
+    function updateTemplateBlogCounter() {
+        var count = $('.template-blog-checkbox:checked').length;
+        $('#templateBlogCount').text(count);
+    }
+
     /**
      * Show alert notice (Bootstrap style)
      */
@@ -50,7 +55,6 @@
             dev_mode: $form.find('[name=dev_mode]').is(':checked') ? 1 : 0,
             batch_size: $form.find('[name=batch_size]').val(),
             retry_max: $form.find('[name=retry_max]').val(),
-            deploy_blog_ids: $form.find('[name="deploy_blog_ids[]"]:checked').map(function() { return $(this).val(); }).get(),
         }, function(res) {
             $btn.prop('disabled', false);
             showNotice(res.success ? res.data : (res.data || 'Lỗi không xác định'), res.success ? 'success' : 'danger');
@@ -61,6 +65,7 @@
     });
 
     $(document).on('change', '.deploy-site-checkbox', updateDeploySiteCounter);
+    $(document).on('change', '.template-blog-checkbox', updateTemplateBlogCounter);
 
     $(document).on('click', '#btnSelectAllDeploySites', function() {
         $('.deploy-site-checkbox').prop('checked', true);
@@ -72,7 +77,42 @@
         updateDeploySiteCounter();
     });
 
+    $(document).on('click', '#btnSelectAllTemplateSites', function() {
+        $('.template-blog-checkbox').prop('checked', true);
+        updateTemplateBlogCounter();
+    });
+
+    $(document).on('click', '#btnClearTemplateSites', function() {
+        $('.template-blog-checkbox').prop('checked', false);
+        updateTemplateBlogCounter();
+    });
+
     updateDeploySiteCounter();
+    updateTemplateBlogCounter();
+
+    /**
+     * Intermediary Settings Form
+     */
+    $('#tgsZaloIntermediaryForm').on('submit', function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('[type=submit]').prop('disabled', true);
+
+        $.post(ajaxUrl, {
+            action: 'tgs_zalo_save_intermediary_settings',
+            nonce: nonce,
+            intermediary_url: $form.find('[name=intermediary_url]').val(),
+            intermediary_method: $form.find('[name=intermediary_method]').val(),
+            intermediary_auth: $form.find('[name=intermediary_auth]').val(),
+            intermediary_enabled: $form.find('[name=intermediary_enabled]').is(':checked') ? 1 : 0,
+        }, function(res) {
+            $btn.prop('disabled', false);
+            showNotice(res.success ? res.data : (res.data || 'Lỗi không xác định'), res.success ? 'success' : 'danger');
+        }).fail(function() {
+            $btn.prop('disabled', false);
+            showNotice('Lỗi kết nối server', 'danger');
+        });
+    });
 
     /**
      * Test Connection (both buttons)
@@ -124,21 +164,73 @@
         });
     });
 
+    var SAMPLE_OFFICIAL = {
+        "customer_name":    "customer_name",
+        "order_code":       "order_code",
+        "blog_id":          "blog_id",
+        "order_code_url":   "order_code_url",
+        "amount":           "total_amount_raw",
+        "date":             "sale_date",
+        "status":           "static:Đã thanh toán"
+    };
+
+    var SAMPLE_INTERMEDIARY = {
+        "ten_khach_hang":   "customer_name",
+        "ma_khach_hang":    "customer_code",
+        "don_hang":         "order_code",
+        "ngay":             "sale_date_only",
+        "gia_tri":          "price",
+        "diem_tich_luy":    "point",
+        "tong_diem":        "total_point",
+        "note":             "note",
+        "hoadon":           "hoadon_query"
+    };
+
+    function getSelectedProvider() {
+        return $('[name=provider]:checked').val() || 'official';
+    }
+
+    function updateProviderUI() {
+        var provider = getSelectedProvider();
+        var $hint    = $('#providerMappingHint');
+        var $sample  = $('#btnSampleMapping');
+
+        if (provider === 'intermediary') {
+            $hint
+                .removeClass('alert-primary')
+                .addClass('alert-warning')
+                .html(
+                    '<i class="bx bx-transfer me-1"></i><strong>Trung gian Yoursales:</strong> ' +
+                    'Dùng <code>hoadon_query</code> cho tham số tra cứu hóa đơn (VD: <code>hoadon: "hoadon_query"</code>). ' +
+                    'Không dùng <code>order_code_url</code>. ' +
+                    'Dùng <code>sale_date_only</code> cho ngày (chỉ d/m/Y, không có giờ), thay vì <code>sale_date</code>.'
+                )
+                .show();
+            $sample.text(JSON.stringify(SAMPLE_INTERMEDIARY));
+        } else {
+            $hint
+                .removeClass('alert-warning')
+                .addClass('alert-primary')
+                .html(
+                    '<i class="bx bxl-meta me-1"></i><strong>Zalo chính thống:</strong> ' +
+                    'Dùng <code>order_code_url</code> cho button tra cứu hóa đơn. ' +
+                    'Không dùng <code>hoadon_query</code>.'
+                )
+                .show();
+            $sample.text(JSON.stringify(SAMPLE_OFFICIAL));
+        }
+    }
+
+    $(document).on('change', '[name=provider]', updateProviderUI);
+
     /**
-     * Sample Mapping — click to fill
+     * Sample Mapping — click to fill (provider-aware)
      */
     $(document).on('click', '#btnSampleMapping', function() {
-        var sample = {
-            "customer_name": "customer_name",
-            "order_code": "order_code",
-            "blog_id": "blog_id",
-            "order_code_url": "order_code_url",
-            "amount": "total_amount_raw",
-            "date": "sale_date",
-            "status": "static:Đã thanh toán"
-        };
+        var provider = getSelectedProvider();
+        var sample   = provider === 'intermediary' ? SAMPLE_INTERMEDIARY : SAMPLE_OFFICIAL;
         $('#templateFieldMapping').val(JSON.stringify(sample, null, 2));
-        showNotice('Đã điền mẫu mapping. Hãy chỉnh sửa tên param cho khớp với template Zalo của bạn.', 'info');
+        showNotice('Đã điền mẫu mapping ' + (provider === 'intermediary' ? 'Trung gian Yoursales' : 'Zalo chính thống') + '. Hãy chỉnh tên param cho khớp với template của bạn.', 'info');
     });
 
     /**
@@ -184,6 +276,8 @@
             return;
         }
 
+        var blogIds = $form.find('.template-blog-checkbox:checked').map(function() { return $(this).val(); }).get();
+
         $.post(ajaxUrl, {
             action: 'tgs_zalo_save_template',
             nonce: nonce,
@@ -193,6 +287,8 @@
             zalo_template_id: $form.find('#templateZaloId').val(),
             field_mapping: mapping,
             is_active: $form.find('#templateIsActive').is(':checked') ? 1 : 0,
+            provider: $form.find('[name=provider]:checked').val() || 'official',
+            'enabled_blog_ids[]': blogIds,
         }, function(res) {
             $btn.prop('disabled', false);
             if (res.success) {
@@ -234,6 +330,30 @@
             $('#templateFieldMapping').val(JSON.stringify(mappingObject || {}, null, 2));
         }
         $('#templateIsActive').prop('checked', $btn.data('active') == 1);
+
+        // Populate provider
+        var provider = $btn.data('provider') || 'official';
+        $('[name=provider][value=' + provider + ']').prop('checked', true);
+        updateProviderUI();
+
+        // Populate blog checkboxes
+        var blogIds = [];
+        var rawBlogIds = $btn.data('blog-ids');
+        if (rawBlogIds) {
+            if (Array.isArray(rawBlogIds)) {
+                blogIds = rawBlogIds; // jQuery đã auto-parse JSON array
+            } else {
+                try { blogIds = JSON.parse(rawBlogIds); } catch(e) {}
+            }
+        }
+        $('.template-blog-checkbox').prop('checked', false);
+        if (blogIds.length) {
+            $.each(blogIds, function(i, bid) {
+                $('.template-blog-checkbox[value=' + bid + ']').prop('checked', true);
+            });
+        }
+        updateTemplateBlogCounter();
+
         $('#formTitle').html('<i class="bx bx-edit me-2 text-warning"></i>Chỉnh sửa Template #' + $btn.data('id'));
         $('#btnCancelEdit').show();
 
@@ -248,6 +368,10 @@
         $('#tgsZaloTemplateForm')[0].reset();
         $('#templateFieldMapping').val('{}');
         $('#templateIsActive').prop('checked', true);
+        $('[name=provider][value=official]').prop('checked', true);
+        $('.template-blog-checkbox').prop('checked', false);
+        updateTemplateBlogCounter();
+        updateProviderUI();
         $('#formTitle').html('<i class="bx bx-plus-circle me-2 text-success"></i>Thêm Template mới');
         $(this).hide();
     });

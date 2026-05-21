@@ -32,11 +32,16 @@ class TGS_Zalo_Queue {
 
         $max_retries = intval(get_site_option('tgs_zalo_retry_max', 3));
 
+        $provider = in_array($args['provider'] ?? '', ['official', 'intermediary'], true)
+            ? $args['provider']
+            : 'official';
+
         $result = $wpdb->insert($table, [
             'blog_id'          => intval($args['blog_id'] ?? get_current_blog_id()),
             'phone'            => $phone,
             'template_id'      => intval($args['template_id'] ?? 0),
             'zalo_template_id' => sanitize_text_field($args['zalo_template_id'] ?? ''),
+            'provider'         => $provider,
             'template_data'    => wp_json_encode($args['template_data'] ?? [], JSON_UNESCAPED_UNICODE),
             'tracking_id'      => sanitize_text_field($args['tracking_id'] ?? ''),
             'status'           => 'pending',
@@ -60,7 +65,7 @@ class TGS_Zalo_Queue {
      * @return array Stats about processed messages
      */
     public static function process_queue() {
-        if (!get_site_option('tgs_zalo_enabled', 0)) {
+        if (!get_site_option('tgs_zalo_enabled', 0) && !get_site_option('tgs_zalo_intermediary_enabled', 0)) {
             return ['skipped' => true, 'reason' => 'Plugin disabled'];
         }
 
@@ -98,13 +103,25 @@ class TGS_Zalo_Queue {
 
         foreach ($messages as $msg) {
             $template_data = json_decode($msg->template_data, true) ?: [];
+            $provider = in_array($msg->provider ?? '', ['official', 'intermediary'], true)
+                ? $msg->provider
+                : 'official';
 
-            $result = TGS_Zalo_API::send_zns_message(
-                $msg->phone,
-                $msg->zalo_template_id,
-                $template_data,
-                $msg->tracking_id
-            );
+            if ($provider === 'intermediary') {
+                $result = TGS_Zalo_API::send_zns_via_intermediary(
+                    $msg->phone,
+                    $msg->zalo_template_id,
+                    $template_data,
+                    $msg->tracking_id
+                );
+            } else {
+                $result = TGS_Zalo_API::send_zns_message(
+                    $msg->phone,
+                    $msg->zalo_template_id,
+                    $template_data,
+                    $msg->tracking_id
+                );
+            }
 
             if (is_wp_error($result)) {
                 self::mark_failed($msg, $result->get_error_message());
@@ -129,6 +146,11 @@ class TGS_Zalo_Queue {
         $log_table = TGS_TABLE_ZALO_MESSAGE_LOG;
         $now = current_time('mysql');
 
+        $provider = in_array($msg->provider ?? '', ['official', 'intermediary'], true)
+            ? $msg->provider
+            : 'official';
+
+        // msg_id tương thích cả Zalo chính thống (data.msg_id) lẫn trung gian (data.msg_id)
         $zalo_msg_id = $zalo_response['data']['msg_id'] ?? '';
 
         // Update queue
@@ -145,6 +167,7 @@ class TGS_Zalo_Queue {
             'blog_id'           => $msg->blog_id,
             'phone'             => $msg->phone,
             'zalo_template_id'  => $msg->zalo_template_id,
+            'provider'          => $provider,
             'template_data'     => $msg->template_data,
             'tracking_id'       => $msg->tracking_id,
             'status'            => 'sent',
@@ -186,11 +209,16 @@ class TGS_Zalo_Queue {
 
         // Log only final failures
         if ($final_failed) {
+            $provider = in_array($msg->provider ?? '', ['official', 'intermediary'], true)
+                ? $msg->provider
+                : 'official';
+
             $wpdb->insert($log_table, [
                 'queue_id'          => $msg->id,
                 'blog_id'           => $msg->blog_id,
                 'phone'             => $msg->phone,
                 'zalo_template_id'  => $msg->zalo_template_id,
+                'provider'          => $provider,
                 'template_data'     => $msg->template_data,
                 'tracking_id'       => $msg->tracking_id,
                 'status'            => 'failed',

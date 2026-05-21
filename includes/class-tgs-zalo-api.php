@@ -153,6 +153,80 @@ class TGS_Zalo_API {
     }
 
     /**
+     * Gửi tin ZNS qua bên trung gian Yoursales
+     *
+     * Cấu hình đọc từ site_option:
+     *   tgs_zalo_intermediary_url    — endpoint POST
+     *   tgs_zalo_intermediary_auth   — giá trị header Authorization (đã bao gồm scheme "Basic ...")
+     *
+     * Payload gửi đi:
+     *   { "template_id": <int>, "phone": "84xxxxxxxxx", "data": { ...mapped_fields... } }
+     *
+     * @param string $phone           SĐT định dạng 84xxxxxxxxx
+     * @param string $zalo_template_id Template ID (số) bên trung gian
+     * @param array  $template_data   Dữ liệu đã map sẵn { param => value }
+     * @param string $tracking_id     ID tracking (ghi log)
+     * @return array|WP_Error         Mảng response hoặc WP_Error
+     */
+    public static function send_zns_via_intermediary($phone, $zalo_template_id, $template_data, $tracking_id = '') {
+        $url = trim((string) get_site_option('tgs_zalo_intermediary_url', ''));
+        if (empty($url)) {
+            return new WP_Error('intermediary_not_configured', 'Chưa cấu hình URL Zalo trung gian.');
+        }
+
+        $auth_header = (string) get_site_option('tgs_zalo_intermediary_auth', '');
+
+        $payload = [
+            'template_id' => is_numeric($zalo_template_id) ? intval($zalo_template_id) : $zalo_template_id,
+            'phone'       => $phone,
+            'data'        => (object) $template_data, // object để JSON encode đúng {}
+        ];
+
+        $headers = [
+            'Content-Type' => 'application/json',
+        ];
+        if (!empty($auth_header)) {
+            $headers['Authorization'] = $auth_header;
+        }
+
+        $response = wp_remote_post($url, [
+            'timeout' => 30,
+            'headers' => $headers,
+            'body'    => wp_json_encode($payload, JSON_UNESCAPED_UNICODE),
+        ]);
+
+        if (is_wp_error($response)) {
+            error_log('[TGS Zalo Intermediary] HTTP error: ' . $response->get_error_message());
+            return $response;
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        // Thành công: {"message":"Thành công","data":{"msg_id":"..."}}
+        if (
+            is_array($body) &&
+            isset($body['message']) &&
+            (
+                mb_stripos($body['message'], 'thành công') !== false ||
+                mb_stripos($body['message'], 'thanh cong') !== false ||
+                (isset($body['data']['msg_id']) && !empty($body['data']['msg_id']))
+            )
+        ) {
+            return $body;
+        }
+
+        // Thất bại: {"message":"...","error_code":"00006"}
+        $error_msg = $body['message'] ?? 'Intermediary API error';
+        $error_code = $body['error_code'] ?? 'unknown';
+        error_log("[TGS Zalo Intermediary] Send failed [{$error_code}]: {$error_msg}");
+
+        return new WP_Error('intermediary_api_error', $error_msg, [
+            'error_code'    => $error_code,
+            'intermediary_response' => $body,
+        ]);
+    }
+
+    /**
      * Format phone number to Zalo format (84xxxxxxxxx)
      *
      * @param string $phone Raw phone number

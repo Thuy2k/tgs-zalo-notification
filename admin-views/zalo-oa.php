@@ -9,7 +9,7 @@ $is_network_admin = current_user_can('manage_network');
 $active_tab = sanitize_text_field($_GET['tab'] ?? 'overview');
 
 // Only network admin can access settings/templates tabs
-if (in_array($active_tab, ['settings', 'templates']) && !$is_network_admin) {
+if (in_array($active_tab, ['settings', 'settings_intermediary', 'templates']) && !$is_network_admin) {
     $active_tab = 'overview';
 }
 
@@ -29,6 +29,14 @@ $secret_key = get_site_option('tgs_zalo_secret_key', '');
 $batch_size = get_site_option('tgs_zalo_batch_size', 50);
 $retry_max = get_site_option('tgs_zalo_retry_max', 3);
 $oauth_redirect_uri = admin_url('?tgs_zalo_oauth_callback=1');
+
+// === Data for Intermediary Settings tab ===
+$intermediary_url     = get_site_option('tgs_zalo_intermediary_url', '');
+$intermediary_method  = get_site_option('tgs_zalo_intermediary_method', 'POST');
+$intermediary_auth    = get_site_option('tgs_zalo_intermediary_auth', '');
+$intermediary_enabled = get_site_option('tgs_zalo_intermediary_enabled', 0);
+
+// === Deploy sites list (dùng cho settings và template form) ===
 $deploy_sites = [];
 if ($is_network_admin && function_exists('get_sites')) {
     $site_objects = get_sites([
@@ -44,7 +52,6 @@ if ($is_network_admin && function_exists('get_sites')) {
             'blog_id'  => intval($site_object->blog_id),
             'name'     => $blog && !empty($blog->blogname) ? $blog->blogname : ('Shop #' . intval($site_object->blog_id)),
             'siteurl'  => $blog && !empty($blog->siteurl) ? $blog->siteurl : '',
-            'selected' => in_array(intval($site_object->blog_id), $enabled_blog_ids, true),
         ];
     }
 
@@ -89,6 +96,7 @@ $available_fields = [
     'sale_date'      => 'Ngày bán (dd/mm/yyyy HH:mm)',
     'shop_name'      => 'Tên cửa hàng',
     'shop_address'   => 'Địa chỉ cửa hàng',
+    'hoadon_query'   => 'Tham số button tra cứu hóa đơn bên trung gian (VD: order_code=HD7_G4GST)',
 ];
 
 if (class_exists('TGS_Zalo_Hooks')) {
@@ -222,7 +230,13 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
             <li class="nav-item">
                 <a class="nav-link <?php echo $active_tab === 'settings' ? 'active' : ''; ?>"
                    href="<?php echo esc_url($base_url . '&tab=settings'); ?>">
-                    <i class="bx bx-cog me-1"></i> Cài đặt
+                    <i class="bx bx-cog me-1"></i> Cài đặt Zalo chính thống
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?php echo $active_tab === 'settings_intermediary' ? 'active' : ''; ?>"
+                   href="<?php echo esc_url($base_url . '&tab=settings_intermediary'); ?>">
+                    <i class="bx bx-transfer me-1"></i> Cài đặt Zalo trung gian
                 </a>
             </li>
             <li class="nav-item">
@@ -441,49 +455,6 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                         </div>
                     </div>
 
-                    <div class="card mb-4">
-                        <div class="card-header">
-                            <h6 class="mb-0 fw-semibold"><i class="bx bx-store me-2 text-info"></i>Phạm vi triển khai theo shop</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="alert alert-warning border-0 py-2 mb-3" style="font-size: 13px;">
-                                <i class="bx bx-shield-quarter me-1"></i>
-                                Chỉ các shop được chọn mới gửi Zalo OA tự động. Nếu không chọn shop nào, hệ thống sẽ <strong>không gửi</strong> để tránh bung toàn mạng.
-                            </div>
-
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <div class="text-muted small">Đã chọn: <strong id="selectedDeploySiteCount"><?php echo count($enabled_blog_ids); ?></strong> / <?php echo count($deploy_sites); ?> shop</div>
-                                <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectAllDeploySites">Chọn tất cả</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearDeploySites">Bỏ chọn</button>
-                                </div>
-                            </div>
-
-                            <div class="border rounded p-3" style="max-height: 320px; overflow:auto;">
-                                <div class="row g-2">
-                                    <?php foreach ($deploy_sites as $deploy_site): ?>
-                                    <div class="col-md-6">
-                                        <label class="border rounded p-2 d-block h-100" style="cursor:pointer;">
-                                            <div class="form-check mb-1">
-                                                <input class="form-check-input deploy-site-checkbox" type="checkbox"
-                                                       name="deploy_blog_ids[]"
-                                                       value="<?php echo intval($deploy_site['blog_id']); ?>"
-                                                       <?php checked($deploy_site['selected']); ?>>
-                                                <span class="form-check-label fw-semibold">
-                                                    #<?php echo intval($deploy_site['blog_id']); ?> - <?php echo esc_html($deploy_site['name']); ?>
-                                                </span>
-                                            </div>
-                                            <div class="small text-muted ps-4" style="word-break: break-all;">
-                                                <?php echo esc_html($deploy_site['siteurl']); ?>
-                                            </div>
-                                        </label>
-                                    </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Performance -->
                     <div class="card mb-4">
                         <div class="card-header">
@@ -654,6 +625,90 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
         </div>
 
         <!-- ══════════════════════════════════════════════════════════════ -->
+        <!--  TAB: CÀI ĐẶT ZALO TRUNG GIAN                               -->
+        <!-- ══════════════════════════════════════════════════════════════ -->
+        <?php elseif ($active_tab === 'settings_intermediary' && $is_network_admin): ?>
+
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <form id="tgsZaloIntermediaryForm" method="post" onsubmit="return false;">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0 fw-semibold"><i class="bx bx-transfer me-2 text-primary"></i>Cấu hình Zalo Trung gian (Yoursales)</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info border-0 py-2 mb-4" style="font-size: 13px;">
+                                <i class="bx bx-info-circle me-1"></i>
+                                Cấu hình API trung gian để gửi ZNS qua Yoursales thay vì gọi trực tiếp Zalo API.
+                                Mỗi template có thể chọn gửi qua kênh chính thống hoặc trung gian.
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Kích hoạt kênh trung gian</label>
+                                <div class="form-check form-switch mt-1">
+                                    <input class="form-check-input" type="checkbox" name="intermediary_enabled" value="1"
+                                           style="width: 3rem; height: 1.5rem;"
+                                           <?php checked($intermediary_enabled, 1); ?>>
+                                    <label class="form-check-label">Bật gửi qua Yoursales</label>
+                                </div>
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <label class="form-label fw-semibold">URL Endpoint <span class="text-danger">*</span></label>
+                                    <input type="url" name="intermediary_url" class="form-control"
+                                           value="<?php echo esc_attr($intermediary_url); ?>"
+                                           placeholder="VD: https://api.yoursales.vn/api/public/zns/send">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-semibold">HTTP Method</label>
+                                    <select name="intermediary_method" class="form-select">
+                                        <option value="POST" <?php selected($intermediary_method, 'POST'); ?>>POST</option>
+                                        <option value="GET" <?php selected($intermediary_method, 'GET'); ?>>GET</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Authorization Header</label>
+                                    <input type="password" name="intermediary_auth" class="form-control"
+                                           value="<?php echo $intermediary_auth ? '**AUTH_HIDDEN**' : ''; ?>"
+                                           placeholder="VD: Basic N2Iw...">
+                                    <div class="form-text">Để trống nếu không muốn thay đổi. Giá trị hiện tại sẽ được giữ nguyên.</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label fw-semibold">Content-Type</label>
+                                    <input type="text" class="form-control" value="application/json" readonly>
+                                    <div class="form-text">Cố định, không thay đổi được.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end mb-4">
+                        <button type="submit" class="btn btn-primary px-4">
+                            <i class="bx bx-check me-1"></i>Lưu cấu hình trung gian
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header bg-label-info">
+                        <h6 class="mb-0 fw-semibold"><i class="bx bx-info-circle me-2"></i>Lưu ý</h6>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0" style="font-size: 13px; padding-left: 1.2rem;">
+                            <li class="mb-2">Payload gửi đi: <code>{"template_id", "phone", "data": {...}}</code></li>
+                            <li class="mb-2">Tham số <code>hoadon</code> trong data = giá trị field <code>hoadon_query</code> (VD: <code>order_code=HD7_G4GST</code>)</li>
+                            <li class="mb-2">Response thành công: <code>{"message":"Thành công","data":{"msg_id":"..."}}</code></li>
+                            <li>Mỗi template có thể chọn provider riêng trong tab <strong>Template ZNS</strong>.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════ -->
         <!--  TAB: TEMPLATE ZNS (network admin only)                       -->
         <!-- ══════════════════════════════════════════════════════════════ -->
         <?php elseif ($active_tab === 'templates' && $is_network_admin): ?>
@@ -712,9 +767,11 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                     <strong>Mẫu:</strong>
                                     <code class="cursor-pointer text-primary" id="btnSampleMapping"
                                           title="Click để điền mẫu"
-                                        style="cursor: pointer;">{"customer_name": "customer_name", "order_code": "order_code", "blog_id": "blog_id", "order_code_url": "order_code_url", "amount": "total_amount_raw", "date": "sale_date"}</code>
+                                        style="cursor: pointer;" id="sampleMappingText">{"customer_name": "customer_name", "order_code": "order_code", "blog_id": "blog_id", "order_code_url": "order_code_url", "amount": "total_amount_raw", "date": "sale_date"}</code>
                                     <br>Giá trị tĩnh: <code>{"status": "static:Đã thanh toán"}</code>
                                 </div>
+                                <!-- Provider hint -- đổi nội dung theo radio provider -->
+                                <div id="providerMappingHint" class="alert border-0 py-2 mt-2" style="font-size:12px; display:none;"></div>
                             </div>
 
                             <!-- Available keys reference -->
@@ -756,6 +813,54 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                 </div>
                             </div>
 
+                            <!-- Provider -->
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Kênh gửi (Provider)</label>
+                                <div class="d-flex gap-3 mt-1">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="provider"
+                                               id="providerOfficial" value="official" checked>
+                                        <label class="form-check-label" for="providerOfficial">
+                                            <i class="bx bxl-meta me-1 text-primary"></i>Zalo chính thống
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="provider"
+                                               id="providerIntermediary" value="intermediary">
+                                        <label class="form-check-label" for="providerIntermediary">
+                                            <i class="bx bx-transfer me-1 text-warning"></i>Trung gian Yoursales
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Phạm vi triển khai theo shop -->
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold"><i class="bx bx-store me-1 text-info"></i>Phạm vi triển khai theo shop</label>
+                                <div class="form-text mb-2">Chọn shop được phép nhận tin từ template này. Nếu không chọn, dùng fallback cấu hình toàn cục.</div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="text-muted small">Đã chọn: <strong id="templateBlogCount">0</strong> / <?php echo count($deploy_sites); ?> shop</div>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectAllTemplateSites">Chọn tất cả</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearTemplateSites">Bỏ chọn</button>
+                                    </div>
+                                </div>
+                                <div class="border rounded p-2" style="max-height: 240px; overflow:auto;">
+                                    <div class="row g-1">
+                                        <?php foreach ($deploy_sites as $site): ?>
+                                        <div class="col-md-6">
+                                            <label class="border rounded px-2 py-1 d-block" style="cursor:pointer; font-size:13px;">
+                                                <input class="form-check-input template-blog-checkbox me-1" type="checkbox"
+                                                       name="enabled_blog_ids[]"
+                                                       value="<?php echo intval($site['blog_id']); ?>">
+                                                <span class="fw-semibold">#<?php echo intval($site['blog_id']); ?></span> <?php echo esc_html($site['name']); ?>
+                                            </label>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="d-flex gap-2">
                                 <button type="submit" class="btn btn-primary flex-grow-1">
                                     <i class="bx bx-check me-1"></i>Lưu Template
@@ -790,6 +895,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                             <th>Tên</th>
                                             <th>Sự kiện</th>
                                             <th>Template ID</th>
+                                            <th>Provider</th>
                                             <th>Trạng thái</th>
                                             <th style="width: 130px;">Hành động</th>
                                         </tr>
@@ -806,6 +912,13 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                             </td>
                                             <td><code><?php echo esc_html($tpl->zalo_template_id); ?></code></td>
                                             <td>
+                                                <?php if (($tpl->provider ?? 'official') === 'intermediary'): ?>
+                                                    <span class="badge bg-label-warning"><i class="bx bx-transfer me-1"></i>Trung gian</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-label-primary">Chính thống</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
                                                 <?php if ($tpl->is_active): ?>
                                                     <span class="badge bg-success">Bật</span>
                                                 <?php else: ?>
@@ -821,6 +934,8 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                                         data-zalo-id="<?php echo esc_attr($tpl->zalo_template_id); ?>"
                                                         data-mapping="<?php echo esc_attr($tpl->field_mapping); ?>"
                                                         data-active="<?php echo intval($tpl->is_active); ?>"
+                                                        data-provider="<?php echo esc_attr($tpl->provider ?? 'official'); ?>"
+                                                        data-blog-ids="<?php echo esc_attr($tpl->enabled_blog_ids ?? ''); ?>"
                                                         title="Sửa">
                                                         <i class="bx bx-edit"></i>
                                                     </button>
@@ -900,6 +1015,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                             <?php if ($is_network_admin): ?><th>Site</th><?php endif; ?>
                             <th>SĐT</th>
                             <th>Template</th>
+                            <th>Provider</th>
                             <th>Trạng thái</th>
                             <th>Ngày mua (param)</th>
                             <th>Zalo Msg ID</th>
@@ -910,7 +1026,7 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                     </thead>
                     <tbody>
                         <?php if (empty($logs)): ?>
-                            <tr><td colspan="<?php echo $is_network_admin ? 10 : 9; ?>" class="text-center py-4 text-muted">
+                            <tr><td colspan="<?php echo $is_network_admin ? 11 : 10; ?>" class="text-center py-4 text-muted">
                                 <i class="bx bx-inbox" style="font-size: 24px;"></i><br>Không có dữ liệu
                             </td></tr>
                         <?php else: ?>
@@ -921,6 +1037,13 @@ $base_url = admin_url('admin.php?page=tgs-shop-management&view=zalo-oa');
                                 <?php if ($is_network_admin): ?><td><span class="badge bg-label-secondary"><?php echo intval($log->blog_id); ?></span></td><?php endif; ?>
                                 <td><code><?php echo esc_html($log->phone); ?></code></td>
                                 <td><code class="small"><?php echo esc_html($log->zalo_template_id); ?></code></td>
+                                <td>
+                                    <?php if (($log->provider ?? 'official') === 'intermediary'): ?>
+                                        <span class="badge bg-label-warning"><i class="bx bx-transfer me-1"></i>Trung gian</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-label-primary"><i class="bx bxl-meta me-1"></i>Chính thống</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if ($log->status === 'sent'): ?>
                                         <span class="badge bg-success">Đã gửi</span>

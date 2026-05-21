@@ -68,6 +68,7 @@ class TGS_Zalo_Notification {
 
         // AJAX handlers
         add_action('wp_ajax_tgs_zalo_save_settings', [$this, 'ajax_save_settings']);
+        add_action('wp_ajax_tgs_zalo_save_intermediary_settings', [$this, 'ajax_save_intermediary_settings']);
         add_action('wp_ajax_tgs_zalo_test_connection', [$this, 'ajax_test_connection']);
         add_action('wp_ajax_tgs_zalo_save_template', [$this, 'ajax_save_template']);
         add_action('wp_ajax_tgs_zalo_delete_template', [$this, 'ajax_delete_template']);
@@ -194,11 +195,6 @@ class TGS_Zalo_Notification {
         $dev_mode = intval($_POST['dev_mode'] ?? 0);
         $batch_size = max(1, min(100, intval($_POST['batch_size'] ?? 50)));
         $retry_max = max(0, min(10, intval($_POST['retry_max'] ?? 3)));
-        $deploy_blog_ids = array_map('intval', (array) ($_POST['deploy_blog_ids'] ?? []));
-        $deploy_blog_ids = array_values(array_unique(array_filter($deploy_blog_ids, function($blog_id) {
-            return $blog_id > 0;
-        })));
-
         update_site_option('tgs_zalo_app_id', $app_id);
         if (!empty($secret_key) && $secret_key !== '********') {
             update_site_option('tgs_zalo_secret_key', $secret_key);
@@ -207,7 +203,6 @@ class TGS_Zalo_Notification {
         update_site_option('tgs_zalo_dev_mode', $dev_mode);
         update_site_option('tgs_zalo_batch_size', $batch_size);
         update_site_option('tgs_zalo_retry_max', $retry_max);
-        update_site_option('tgs_zalo_enabled_blog_ids', $deploy_blog_ids);
 
         wp_send_json_success('Đã lưu cài đặt. Shop được triển khai: ' . count($deploy_blog_ids));
     }
@@ -255,17 +250,15 @@ class TGS_Zalo_Notification {
             wp_send_json_error('Unauthorized');
         }
 
-        TGS_Zalo_Hooks::sync_default_sale_points_template();
-
         global $wpdb;
         $table = TGS_TABLE_ZALO_TEMPLATES;
 
-        $id = intval($_POST['template_id'] ?? 0);
+        $id               = intval($_POST['template_id'] ?? 0);
         $zalo_template_id = sanitize_text_field($_POST['zalo_template_id'] ?? '');
-        $event_type = sanitize_text_field($_POST['event_type'] ?? '');
-        $label = sanitize_text_field($_POST['label'] ?? '');
-        $field_mapping = sanitize_textarea_field(wp_unslash($_POST['field_mapping'] ?? '{}'));
-        $is_active = intval($_POST['is_active'] ?? 1);
+        $event_type       = sanitize_text_field($_POST['event_type'] ?? '');
+        $label            = sanitize_text_field($_POST['label'] ?? '');
+        $field_mapping    = sanitize_textarea_field(wp_unslash($_POST['field_mapping'] ?? '{}'));
+        $is_active        = intval($_POST['is_active'] ?? 1);
 
         if (empty($zalo_template_id) || empty($event_type) || empty($label)) {
             wp_send_json_error('Thiếu thông tin bắt buộc.');
@@ -277,13 +270,16 @@ class TGS_Zalo_Notification {
             wp_send_json_error('Field mapping JSON không hợp lệ: ' . json_last_error_msg());
         }
 
-        if ($event_type === 'sale_completed') {
-            $zalo_template_id = '577154';
-        }
-
         if (!is_array($decoded)) {
             wp_send_json_error('Field mapping JSON phải là object dạng key-value.');
         }
+
+        $provider         = sanitize_text_field($_POST['provider'] ?? 'official');
+        $provider         = in_array($provider, ['official', 'intermediary'], true) ? $provider : 'official';
+
+        $raw_blog_ids     = (array) ($_POST['enabled_blog_ids'] ?? []);
+        $enabled_blog_ids = array_values(array_unique(array_filter(array_map('intval', $raw_blog_ids))));
+        $enabled_blog_ids_json = !empty($enabled_blog_ids) ? wp_json_encode($enabled_blog_ids) : null;
 
         $data = [
             'zalo_template_id' => $zalo_template_id,
@@ -291,6 +287,8 @@ class TGS_Zalo_Notification {
             'label'            => $label,
             'field_mapping'    => $field_mapping,
             'is_active'        => $is_active,
+            'provider'         => $provider,
+            'enabled_blog_ids' => $enabled_blog_ids_json,
             'updated_at'       => current_time('mysql'),
         ];
 
@@ -302,6 +300,34 @@ class TGS_Zalo_Notification {
         }
 
         wp_send_json_success('Đã lưu template.');
+    }
+
+    /**
+     * AJAX: Save intermediary Zalo config (Yoursales)
+     */
+    public function ajax_save_intermediary_settings() {
+        check_ajax_referer('tgs_zalo_admin', 'nonce');
+
+        if (!current_user_can('manage_network')) {
+            wp_send_json_error('Unauthorized');
+        }
+
+        $url     = esc_url_raw(trim($_POST['intermediary_url'] ?? ''));
+        $method  = strtoupper(sanitize_text_field($_POST['intermediary_method'] ?? 'POST'));
+        $method  = in_array($method, ['POST', 'GET'], true) ? $method : 'POST';
+        $auth    = sanitize_text_field(wp_unslash($_POST['intermediary_auth'] ?? ''));
+        $enabled = intval($_POST['intermediary_enabled'] ?? 0);
+
+        update_site_option('tgs_zalo_intermediary_url', $url);
+        update_site_option('tgs_zalo_intermediary_method', $method);
+        update_site_option('tgs_zalo_intermediary_enabled', $enabled);
+
+        // Only save auth if it's not the hidden placeholder
+        if (!empty($auth) && $auth !== '**AUTH_HIDDEN**') {
+            update_site_option('tgs_zalo_intermediary_auth', $auth);
+        }
+
+        wp_send_json_success('OK');
     }
 
     /**

@@ -7,8 +7,6 @@ if (!defined('ABSPATH')) exit;
 
 class TGS_Zalo_Hooks {
 
-    private const DEFAULT_SALE_TEMPLATE_ID = '577154';
-
     /**
      * Register hooks
      */
@@ -28,7 +26,10 @@ class TGS_Zalo_Hooks {
      * @param array $sale_data Sale data from tgs_sale_completed hook
      */
     public static function on_sale_completed($sale_data) {
-        if (!get_site_option('tgs_zalo_enabled', 0)) {
+        error_log('[TGS Zalo] on_sale_completed fired. sale_code=' . ($sale_data['sale_code'] ?? 'n/a') . ' blog_id=' . ($sale_data['blog_id'] ?? get_current_blog_id()) . ' source_type=' . ($sale_data['source_type'] ?? 'n/a'));
+
+        if (!get_site_option('tgs_zalo_enabled', 0) && !get_site_option('tgs_zalo_intermediary_enabled', 0)) {
+            error_log('[TGS Zalo] Skipped: cả tgs_zalo_enabled và tgs_zalo_intermediary_enabled đều = 0');
             return;
         }
 
@@ -36,19 +37,18 @@ class TGS_Zalo_Hooks {
 
         $phone = $sale_data['person_phone'] ?? '';
         if (empty($phone)) {
+            error_log('[TGS Zalo] Skipped: empty phone');
             return;
         }
 
         // Check if phone is valid for Zalo
         $formatted_phone = TGS_Zalo_API::format_phone($phone);
         if (empty($formatted_phone)) {
+            error_log('[TGS Zalo] Skipped: invalid phone format: ' . $phone);
             return;
         }
 
         $blog_id = $sale_data['blog_id'] ?? get_current_blog_id();
-        if (!self::is_blog_enabled($blog_id)) {
-            return;
-        }
 
         // Get shop/site name for template
         $site_name = '';
@@ -73,30 +73,33 @@ class TGS_Zalo_Hooks {
 
         // Build available data for template mapping
         $available_data = [
-            'customer_name'  => $sale_data['person_name'] ?? 'Quý khách',
-            'customer_phone' => $phone,
-            'customer_email' => $sale_data['person_email'] ?? '',
-            'customer_id'    => $sale_data['customer_id'] ?? '',
-            'customer_code'  => $sale_data['customer_code'] ?? ($sale_data['customer_id'] ?? ''),
-            'sale_code'      => $sale_data['sale_code'] ?? '',
-            'order_code'     => $order_code,
-            'blog_id'        => (string) $blog_id,
-            'order_code_url' => self::build_order_lookup_url($blog_id, $order_code),
-            'export_code'    => $sale_data['export_code'] ?? '',
-            'order_date'     => $order_date,
-            'price'          => $price,
-            'point'          => $earned_points,
-            'total_point'    => $total_points,
-            'note'           => self::truncate_text($note, 30),
-            'total_amount'       => self::format_currency($sale_data['total_amount'] ?? 0),
-            'total_amount_raw'   => intval($sale_data['total_amount'] ?? 0),
-            'total_items'    => $sale_data['total_items'] ?? 0,
-            'discount'           => self::format_currency($sale_data['discount'] ?? 0),
-            'discount_raw'       => intval($sale_data['discount'] ?? 0),
-            'sale_date'      => current_time('d/m/Y H:i'),
-            'shop_name'      => $sale_data['shop_name'] ?? $site_name,
-            'shop_address'   => $shop_address,
-            'employee_id'    => $sale_data['employee_id'] ?? 0,
+            'customer_name'    => $sale_data['person_name'] ?? 'Quý khách',
+            'customer_phone'   => $phone,
+            'customer_email'   => $sale_data['person_email'] ?? '',
+            'customer_id'      => $sale_data['customer_id'] ?? '',
+            'customer_code'    => $sale_data['customer_code'] ?? ($sale_data['customer_id'] ?? ''),
+            'sale_code'        => $sale_data['sale_code'] ?? '',
+            'order_code'       => $order_code,
+            'blog_id'          => (string) $blog_id,
+            'order_code_url'   => self::build_order_lookup_url($blog_id, $order_code),
+            // Phàn trung gian: hóa đơn dưới dạng query param cho nút button Zalo
+            'hoadon_query'     => $order_code !== '' ? 'order_code=' . rawurlencode($order_code) : '',
+            'export_code'      => $sale_data['export_code'] ?? '',
+            'order_date'       => $order_date,
+            'price'            => $price,
+            'point'            => $earned_points,
+            'total_point'      => $total_points,
+            'note'             => self::truncate_text($note, 30),
+            'total_amount'         => self::format_currency($sale_data['total_amount'] ?? 0),
+            'total_amount_raw'     => intval($sale_data['total_amount'] ?? 0),
+            'total_items'      => $sale_data['total_items'] ?? 0,
+            'discount'             => self::format_currency($sale_data['discount'] ?? 0),
+            'discount_raw'         => intval($sale_data['discount'] ?? 0),
+            'sale_date'        => current_time('d/m/Y H:i'),
+            'sale_date_only'   => current_time('d/m/Y'),
+            'shop_name'        => $sale_data['shop_name'] ?? $site_name,
+            'shop_address'     => $shop_address,
+            'employee_id'      => $sale_data['employee_id'] ?? 0,
         ];
 
         // Find all active templates for 'sale_completed' event
@@ -108,10 +111,17 @@ class TGS_Zalo_Hooks {
         }
 
         foreach ($templates as $template) {
+            // Kiểm tra phạm vi shop của từng template
+            if (!self::is_blog_enabled_for_template($blog_id, $template)) {
+                error_log('[TGS Zalo] Template #' . $template->id . ' skipped: blog_id=' . $blog_id . ' not in template scope. enabled_blog_ids=' . ($template->enabled_blog_ids ?? 'null'));
+                continue;
+            }
+
             $field_mapping = json_decode($template->field_mapping, true) ?: [];
             $template_data = self::map_fields($field_mapping, $available_data);
 
             if (empty($template_data)) {
+                error_log('[TGS Zalo] Template #' . $template->id . ' skipped: empty template_data after mapping. field_mapping=' . $template->field_mapping);
                 continue;
             }
 
@@ -128,20 +138,26 @@ class TGS_Zalo_Hooks {
                 continue;
             }
 
+            $provider = in_array($template->provider ?? '', ['official', 'intermediary'], true)
+                ? $template->provider
+                : 'official';
+
             TGS_Zalo_Queue::enqueue([
                 'blog_id'          => $blog_id,
                 'phone'            => $phone,
                 'template_id'      => $template->id,
                 'zalo_template_id' => $template->zalo_template_id,
+                'provider'         => $provider,
                 'template_data'    => $template_data,
                 'tracking_id'      => $tracking_id,
             ]);
+
+            error_log('[TGS Zalo] Enqueued template #' . $template->id . ' provider=' . $provider . ' tracking=' . $tracking_id);
         }
 
-        $pos_source_type = defined('TGS_LEDGER_SOURCE_POS') ? intval(TGS_LEDGER_SOURCE_POS) : 1;
-        if (intval($sale_data['source_type'] ?? 0) === $pos_source_type) {
-            TGS_Zalo_Queue::process_queue();
-        }
+        // Xử lý queue ngay lập tức (không chờ cron)
+        // — đặt ngoài vòng lặp để gửi sau khi enqueue đủ hết
+        TGS_Zalo_Queue::process_queue();
     }
     /**
      * Handle ledger status change (for manual approval of non-POS sales)
@@ -151,7 +167,7 @@ class TGS_Zalo_Hooks {
      * @param int $new_status
      */
     public static function on_ledger_status_changed($ledger_id, $old_status, $new_status) {
-        if (!get_site_option('tgs_zalo_enabled', 0)) {
+        if (!get_site_option('tgs_zalo_enabled', 0) && !get_site_option('tgs_zalo_intermediary_enabled', 0)) {
             return;
         }
 
@@ -189,7 +205,7 @@ class TGS_Zalo_Hooks {
 
         if (!$person || empty($person->local_ledger_person_phone)) return;
 
-        $blog_id = get_current_blog_id();
+        // (ledger path) kiểm tra theo global enabled_blog_ids vì không có template cụ thể
         if (!self::is_blog_enabled($blog_id)) {
             return;
         }
@@ -204,29 +220,34 @@ class TGS_Zalo_Hooks {
         $total_points = $base_points + max(0, intval($earned_points));
 
         $available_data = [
-            'customer_name'  => $person->local_ledger_person_name ?? 'Quý khách',
-            'customer_phone' => $person->local_ledger_person_phone,
-            'customer_id'    => $person_id,
-            'customer_code'  => $person->local_ledger_person_code ?? $person_id,
-            'sale_code'      => $order_code,
-            'order_code'     => $order_code,
-            'blog_id'        => (string) $blog_id,
-            'order_code_url' => self::build_order_lookup_url($blog_id, $order_code),
-            'order_date'     => self::to_zalo_date_string(current_time('timestamp')),
-            'price'          => $price,
-            'point'          => $earned_points,
-            'total_point'    => $total_points,
-            'note'           => self::build_points_note('', $shop_address, $site_name),
-            'total_amount'       => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
-            'total_amount_raw'   => intval($ledger->local_ledger_total_amount ?? 0),
-            'sale_date'      => current_time('d/m/Y H:i'),
-            'shop_name'      => $site_name,
-            'shop_address'   => $shop_address,
+            'customer_name'    => $person->local_ledger_person_name ?? 'Quý khách',
+            'customer_phone'   => $person->local_ledger_person_phone,
+            'customer_id'      => $person_id,
+            'customer_code'    => $person->local_ledger_person_code ?? $person_id,
+            'sale_code'        => $order_code,
+            'order_code'       => $order_code,
+            'blog_id'          => (string) $blog_id,
+            'order_code_url'   => self::build_order_lookup_url($blog_id, $order_code),
+            'hoadon_query'     => $order_code !== '' ? 'order_code=' . rawurlencode($order_code) : '',
+            'order_date'       => self::to_zalo_date_string(current_time('timestamp')),
+            'price'            => $price,
+            'point'            => $earned_points,
+            'total_point'      => $total_points,
+            'note'             => self::build_points_note('', $shop_address, $site_name),
+            'total_amount'         => self::format_currency(floatval($ledger->local_ledger_total_amount ?? 0)),
+            'total_amount_raw'     => intval($ledger->local_ledger_total_amount ?? 0),
+            'sale_date'        => current_time('d/m/Y H:i'),
+            'shop_name'        => $site_name,
+            'shop_address'     => $shop_address,
         ];
 
         $templates = self::get_active_templates('sale_completed');
 
         foreach ($templates as $template) {
+            if (!self::is_blog_enabled_for_template($blog_id, $template)) {
+                continue;
+            }
+
             $field_mapping = json_decode($template->field_mapping, true) ?: [];
             $template_data = self::map_fields($field_mapping, $available_data);
 
@@ -242,11 +263,16 @@ class TGS_Zalo_Hooks {
             ));
             if ($exists > 0) continue;
 
+            $provider = in_array($template->provider ?? '', ['official', 'intermediary'], true)
+                ? $template->provider
+                : 'official';
+
             TGS_Zalo_Queue::enqueue([
                 'blog_id'          => $blog_id,
                 'phone'            => $person->local_ledger_person_phone,
                 'template_id'      => $template->id,
                 'zalo_template_id' => $template->zalo_template_id,
+                'provider'         => $provider,
                 'template_data'    => $template_data,
                 'tracking_id'      => $tracking_id,
             ]);
@@ -254,7 +280,7 @@ class TGS_Zalo_Hooks {
     }
 
     /**
-     * Get active templates for an event type
+     * Get active templates for an event type (không lọc theo template ID cụ thể)
      *
      * @param string $event_type
      * @return array
@@ -262,14 +288,6 @@ class TGS_Zalo_Hooks {
     private static function get_active_templates($event_type) {
         global $wpdb;
         $table = TGS_TABLE_ZALO_TEMPLATES;
-
-        if ($event_type === 'sale_completed') {
-            return $wpdb->get_results($wpdb->prepare(
-                "SELECT * FROM {$table} WHERE event_type = %s AND is_active = 1 AND zalo_template_id = %s",
-                $event_type,
-                self::DEFAULT_SALE_TEMPLATE_ID
-            ));
-        }
 
         return $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE event_type = %s AND is_active = 1",
@@ -439,6 +457,30 @@ class TGS_Zalo_Hooks {
         return wp_json_encode($mapping, JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Kiểm tra blog_id có trong phạm vi của một template cụ thể.
+     * - Nếu template.enabled_blog_ids có dữ liệu → chỉ gửi nếu blog_id nằm trong danh sách.
+     * - Nếu null/rỗng → fallback về cấu hình toàn cục (tgs_zalo_enabled_blog_ids).
+     */
+    private static function is_blog_enabled_for_template($blog_id, $template) {
+        $blog_id = intval($blog_id);
+        $template_ids = [];
+
+        if (!empty($template->enabled_blog_ids)) {
+            $decoded = json_decode($template->enabled_blog_ids, true);
+            if (is_array($decoded) && !empty($decoded)) {
+                $template_ids = array_values(array_unique(array_filter(array_map('intval', $decoded))));
+            }
+        }
+
+        if (!empty($template_ids)) {
+            return in_array($blog_id, $template_ids, true);
+        }
+
+        // Fallback: kiểm tra cấu hình toàn cục
+        return self::is_blog_enabled($blog_id);
+    }
+
     private static function is_blog_enabled($blog_id) {
         $enabled_blog_ids = get_site_option('tgs_zalo_enabled_blog_ids', []);
 
@@ -550,7 +592,8 @@ class TGS_Zalo_Hooks {
     }
 
     /**
-     * Seed sẵn template demo tích điểm để bấm tạo đơn POS là có thể gửi ngay.
+     * Đảm bảo có ít nhất 1 template mặc định (chỉ seed lần đầu, KHÔNG override dữ liệu hiện có).
+     * Không còn ép buộc zalo_template_id cố định nữa — admin tự quản lý qua giao diện.
      */
     public static function sync_default_sale_points_template() {
         if (!defined('TGS_TABLE_ZALO_TEMPLATES')) {
@@ -565,47 +608,37 @@ class TGS_Zalo_Hooks {
             return;
         }
 
-        $default_mapping_json = wp_json_encode(self::get_default_sale_field_mapping(), JSON_UNESCAPED_UNICODE);
+        // Đã seed rồi thì bỏ qua — không override template admin đã chỉnh
+        if (get_site_option('tgs_zalo_seeded_sale_points_template', 0)) {
+            return;
+        }
 
-        $sale_templates = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, zalo_template_id, field_mapping
-             FROM {$table}
-             WHERE event_type = %s
-             ORDER BY id ASC",
+        $has_templates = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table} WHERE event_type = %s",
             'sale_completed'
         ));
 
-        if (!empty($sale_templates)) {
-            foreach ($sale_templates as $template) {
-                $wpdb->update(
-                    $table,
-                    [
-                        'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
-                        'field_mapping'    => self::merge_default_sale_field_mapping($template->field_mapping),
-                        'updated_at'       => current_time('mysql'),
-                    ],
-                    ['id' => intval($template->id)],
-                    ['%s', '%s', '%s'],
-                    ['%d']
-                );
-            }
-
+        // Nếu đã có template thì đánh dấu đã seed và không làm gì thêm
+        if ($has_templates > 0) {
             update_site_option('tgs_zalo_seeded_sale_points_template', 1);
             return;
         }
 
-        if (!get_site_option('tgs_zalo_seeded_sale_points_template', 0)) {
-            $now = current_time('mysql');
-            $wpdb->insert($table, [
-                'zalo_template_id' => self::DEFAULT_SALE_TEMPLATE_ID,
-                'event_type'       => 'sale_completed',
-                'label'            => 'Thông báo tích điểm POS mặc định',
-                'field_mapping'    => $default_mapping_json,
-                'is_active'        => 1,
-                'created_at'       => $now,
-                'updated_at'       => $now,
-            ]);
-        }
+        // Seed template mặc định lần đầu (admin chưa tạo bất kỳ template nào)
+        $default_mapping_json = wp_json_encode(self::get_default_sale_field_mapping(), JSON_UNESCAPED_UNICODE);
+        $now = current_time('mysql');
+
+        $wpdb->insert($table, [
+            'zalo_template_id' => '',
+            'event_type'       => 'sale_completed',
+            'label'            => 'Thông báo tích điểm POS (mặc định — cần cấu hình Template ID)',
+            'field_mapping'    => $default_mapping_json,
+            'is_active'        => 0,
+            'provider'         => 'official',
+            'enabled_blog_ids' => null,
+            'created_at'       => $now,
+            'updated_at'       => $now,
+        ]);
 
         update_site_option('tgs_zalo_seeded_sale_points_template', 1);
     }
