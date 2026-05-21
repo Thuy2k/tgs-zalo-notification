@@ -81,9 +81,11 @@ class TGS_Zalo_Queue {
         $cutoff = gmdate('Y-m-d H:i:s', time() - 86400);
         $messages = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} 
-             WHERE status IN ('pending', 'failed') 
+             WHERE (
+                 (status = 'pending')
+                 OR (status = 'failed' AND retry_count < max_retries)
+             )
                AND (next_retry_at IS NULL OR next_retry_at <= %s)
-               AND retry_count < max_retries
                AND created_at >= %s
              ORDER BY created_at ASC 
              LIMIT %d",
