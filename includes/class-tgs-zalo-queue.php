@@ -30,11 +30,12 @@ class TGS_Zalo_Queue {
             return false;
         }
 
-        $max_retries = intval(get_site_option('tgs_zalo_retry_max', 3));
-
         $provider = in_array($args['provider'] ?? '', ['official', 'intermediary'], true)
             ? $args['provider']
             : 'official';
+
+        // Intermediary: không retry (gửi 1 lần duy nhất — tránh gửi lặp nguy hiểm)
+        $max_retries = $provider === 'intermediary' ? 0 : intval(get_site_option('tgs_zalo_retry_max', 3));
 
         $result = $wpdb->insert($table, [
             'blog_id'          => intval($args['blog_id'] ?? get_current_blog_id()),
@@ -76,14 +77,18 @@ class TGS_Zalo_Queue {
         $now = current_time('mysql');
 
         // Get pending messages (including retry-ready ones)
+        // Chỉ xử lý các entry không quá 24 giờ (tránh retry entry cũ có data lỗi thời)
+        $cutoff = gmdate('Y-m-d H:i:s', time() - 86400);
         $messages = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} 
              WHERE status IN ('pending', 'failed') 
                AND (next_retry_at IS NULL OR next_retry_at <= %s)
                AND retry_count < max_retries
+               AND created_at >= %s
              ORDER BY created_at ASC 
              LIMIT %d",
             $now,
+            $cutoff,
             $batch_size
         ));
 
@@ -162,7 +167,7 @@ class TGS_Zalo_Queue {
         ], ['id' => $msg->id]);
 
         // Insert into log
-        $wpdb->insert($log_table, [
+        $insert_result = $wpdb->insert($log_table, [
             'queue_id'          => $msg->id,
             'blog_id'           => $msg->blog_id,
             'phone'             => $msg->phone,
@@ -177,6 +182,10 @@ class TGS_Zalo_Queue {
             'created_at'        => $msg->created_at,
             'sent_at'           => $now,
         ]);
+
+        if ($insert_result === false) {
+            error_log('[TGS Zalo Queue] Log INSERT failed for queue_id=' . $msg->id . ' error=' . $wpdb->last_error);
+        }
     }
 
     /**
