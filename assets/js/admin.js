@@ -166,12 +166,15 @@
 
     var SAMPLE_OFFICIAL = {
         "customer_name":    "customer_name",
+        "customer_code":    "customer_code",
         "order_code":       "order_code",
+        "order_date":       "sale_date",
+        "price":            "total_amount_raw",
+        "point":            "point",
+        "total_point":      "total_point",
+        "note":             "note",
         "blog_id":          "blog_id",
-        "order_code_url":   "order_code_url",
-        "amount":           "total_amount_raw",
-        "date":             "sale_date",
-        "status":           "static:Đã thanh toán"
+        "order_code_url":   "order_code_url"
     };
 
     var SAMPLE_INTERMEDIARY = {

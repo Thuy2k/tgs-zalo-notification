@@ -386,7 +386,7 @@ class TGS_Zalo_Hooks {
         if (is_numeric($value)) {
             $timestamp = (float) $value;
             if ($timestamp <= 0) {
-                return current_time('H:i:s d/m/Y');
+                return current_time('d/m/Y H:i');
             }
 
             // Milliseconds -> seconds
@@ -394,15 +394,15 @@ class TGS_Zalo_Hooks {
                 $timestamp = $timestamp / 1000;
             }
 
-            return wp_date('H:i:s d/m/Y', intval(round($timestamp)));
+            return wp_date('d/m/Y H:i', intval(round($timestamp)));
         }
 
         $parsed = strtotime((string) $value);
         if ($parsed && $parsed > 0) {
-            return wp_date('H:i:s d/m/Y', intval($parsed));
+            return wp_date('d/m/Y H:i', intval($parsed));
         }
 
-        return current_time('H:i:s d/m/Y');
+        return current_time('d/m/Y H:i');
     }
 
     /**
