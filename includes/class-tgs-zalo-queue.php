@@ -161,12 +161,16 @@ class TGS_Zalo_Queue {
         $zalo_msg_id = $zalo_response['data']['msg_id'] ?? '';
 
         // Update queue
-        $wpdb->update($queue_table, [
+        $update_result = $wpdb->update($queue_table, [
             'status'      => 'sent',
             'zalo_msg_id' => $zalo_msg_id,
             'sent_at'     => $now,
             'updated_at'  => $now,
         ], ['id' => $msg->id]);
+
+        if ($update_result === false) {
+            error_log('[TGS Zalo Queue] Queue UPDATE failed id=' . $msg->id . ' error=' . $wpdb->last_error);
+        }
 
         // Insert into log
         $insert_result = $wpdb->insert($log_table, [

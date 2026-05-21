@@ -205,12 +205,8 @@ class TGS_Zalo_API {
         // Thành công: {"message":"Thành công","data":{"msg_id":"..."}}
         if (
             is_array($body) &&
-            isset($body['message']) &&
-            (
-                mb_stripos($body['message'], 'thành công') !== false ||
-                mb_stripos($body['message'], 'thanh cong') !== false ||
-                (isset($body['data']['msg_id']) && !empty($body['data']['msg_id']))
-            )
+            isset($body['data']['msg_id']) &&
+            !empty($body['data']['msg_id'])
         ) {
             return $body;
         }
