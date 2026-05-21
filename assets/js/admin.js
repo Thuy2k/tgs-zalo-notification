@@ -168,7 +168,7 @@
         "customer_name":    "customer_name",
         "customer_code":    "customer_code",
         "order_code":       "order_code",
-        "order_date":       "sale_date",
+        "order_date":       "order_date",
         "price":            "total_amount_raw",
         "point":            "point",
         "total_point":      "total_point",
