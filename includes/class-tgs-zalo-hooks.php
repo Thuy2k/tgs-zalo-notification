@@ -95,7 +95,7 @@ class TGS_Zalo_Hooks {
             'total_items'      => $sale_data['total_items'] ?? 0,
             'discount'             => self::format_currency($sale_data['discount'] ?? 0),
             'discount_raw'         => intval($sale_data['discount'] ?? 0),
-            'sale_date'        => current_time('d/m/Y H:i'),
+            'sale_date'        => current_time('d/m/Y H:i:s'),
             'sale_date_only'   => current_time('d/m/Y'),
             'shop_name'        => $sale_data['shop_name'] ?? $site_name,
             'shop_address'     => $shop_address,
@@ -386,7 +386,7 @@ class TGS_Zalo_Hooks {
         if (is_numeric($value)) {
             $timestamp = (float) $value;
             if ($timestamp <= 0) {
-                return current_time('d/m/Y H:i');
+                return current_time('d/m/Y H:i:s');
             }
 
             // Milliseconds -> seconds
@@ -394,15 +394,15 @@ class TGS_Zalo_Hooks {
                 $timestamp = $timestamp / 1000;
             }
 
-            return wp_date('d/m/Y H:i', intval(round($timestamp)));
+            return wp_date('d/m/Y H:i:s', intval(round($timestamp)));
         }
 
         $parsed = strtotime((string) $value);
         if ($parsed && $parsed > 0) {
-            return wp_date('d/m/Y H:i', intval($parsed));
+            return wp_date('d/m/Y H:i:s', intval($parsed));
         }
 
-        return current_time('d/m/Y H:i');
+        return current_time('d/m/Y H:i:s');
     }
 
     /**
