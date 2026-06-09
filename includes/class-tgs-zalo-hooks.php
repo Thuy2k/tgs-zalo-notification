@@ -172,6 +172,8 @@ class TGS_Zalo_Hooks {
             return;
         }
 
+        $blog_id = get_current_blog_id();
+
         // Only trigger on approval (status 4) of sale orders (type 10)
         if ($new_status != 4) {
             return;
