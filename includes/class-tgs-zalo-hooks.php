@@ -307,6 +307,7 @@ class TGS_Zalo_Hooks {
      */
     private static function map_fields(array $mapping, array $data) {
         $result = [];
+        $empty  = [];
 
         foreach ($mapping as $zalo_key => $internal_key) {
             // Support static values (prefixed with "static:")
@@ -319,7 +320,27 @@ class TGS_Zalo_Hooks {
                 $value = $data[$internal_key];
                 // Keep numeric types for Zalo number/date fields (raw keys)
                 $result[$zalo_key] = is_int($value) || is_float($value) ? $value : (string) $value;
+
+                if ($result[$zalo_key] === '') {
+                    $empty[] = $zalo_key . ' (' . $internal_key . ')';
+                }
             }
+        }
+
+        /*
+         * ZNS TỪ CHỐI NGUYÊN GÓI TIN NẾU CÓ MỘT THAM SỐ RỖNG.
+         *
+         * Bên trung gian chỉ trả về đúng một câu "Template data không hợp lệ",
+         * không nói tham số nào — nhìn log không tài nào biết hỏng ở đâu, phải
+         * mở DB đọc cột template_data mới ra. Ghi thẳng tên tham số rỗng ra log
+         * để lần sau đọc log là biết.
+         *
+         * Ghi log chứ KHÔNG tự điền bừa giá trị thay thế: mỗi tham số một ý
+         * nghĩa, "-" nhét vào tham số nút tra cứu hoá đơn là sinh ra cái link
+         * hỏng gửi tới khách. Chỗ nào thiếu thì sửa đúng chỗ đó.
+         */
+        if (!empty($empty)) {
+            error_log('[TGS Zalo] Tham số RỖNG, ZNS sẽ từ chối cả gói tin: ' . implode(', ', $empty));
         }
 
         return $result;
