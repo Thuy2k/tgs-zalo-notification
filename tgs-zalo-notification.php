@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Plugin Name: TGS Zalo Notification
  * Plugin URI:  https://tgs.vn
